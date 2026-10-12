@@ -1,5 +1,5 @@
 import { Theme } from "theme.slint";
-import { Printer, Actions, Overlay, Nav, Conn, Settings } from "state.slint";
+import { Printer, Actions, Overlay, Nav, Conn, Settings, Strings, Messages } from "state.slint";
 import { Btn, BtnKind, NavItem } from "widgets.slint";
 import { NumpadDialog, ConfirmDialog, FileDialog, TextDialog, NotReadyPanel } from "dialogs.slint";
 import { DashboardPage } from "pages/dashboard.slint";
@@ -12,7 +12,7 @@ import { ConsolePage } from "pages/console.slint";
 import { SystemPage } from "pages/system.slint";
 import { SettingsPage } from "pages/settings.slint";
 
-export { Printer, Actions, Overlay, Nav, Settings }
+export { Printer, Actions, Overlay, Nav, Settings, Messages }
 
 component TopBar inherits Rectangle {
     height: 46px;
@@ -44,7 +44,7 @@ component TopBar inherits Rectangle {
                 padding-left: 12px;
                 padding-right: 12px;
                 Text {
-                    text: Printer.status-label;
+                    text: Strings.status(Printer.status);
                     color: #ffffff;
                     font-size: Theme.font-s;
                     vertical-alignment: center;
@@ -52,8 +52,8 @@ component TopBar inherits Rectangle {
             }
         }
         Rectangle { horizontal-stretch: 1; }
-        Text {
-            text: Printer.top-temps;
+        for h in Printer.top-heaters: Text {
+            text: Strings.heater-name(h) + " " + round(h.temp) + "/" + round(h.target) + "°";
             color: Theme.text-dim;
             font-size: Theme.font-s;
             vertical-alignment: center;
@@ -84,16 +84,16 @@ export component AppWindow inherits Window {
     default-font-size: Theme.font-m;
 
     property <[{ icon: image, text: string }]> nav-items: [
-        { icon: @image-url("icons/home.svg"), text: "Pulpit" },
-        { icon: @image-url("icons/thermo.svg"), text: "Temp." },
-        { icon: @image-url("icons/move.svg"), text: "Ruch" },
-        { icon: @image-url("icons/extrude.svg"), text: "Filament" },
-        { icon: @image-url("icons/files.svg"), text: "Pliki" },
-        { icon: @image-url("icons/macro.svg"), text: "Makra" },
-        { icon: @image-url("icons/console.svg"), text: "Konsola" },
-        { icon: @image-url("icons/system.svg"), text: "System" },
+        { icon: @image-url("icons/home.svg"), text: @tr("Home") },
+        { icon: @image-url("icons/thermo.svg"), text: @tr("Temp.") },
+        { icon: @image-url("icons/move.svg"), text: @tr("Move") },
+        { icon: @image-url("icons/extrude.svg"), text: @tr("Filament") },
+        { icon: @image-url("icons/files.svg"), text: @tr("Files") },
+        { icon: @image-url("icons/macro.svg"), text: @tr("Macros") },
+        { icon: @image-url("icons/console.svg"), text: @tr("Console") },
+        { icon: @image-url("icons/system.svg"), text: @tr("System") },
     ];
-    // Konsola, System i Ustawienia działają też, gdy Klipper nie jest gotowy
+    // Console, System and Settings also work when Klipper is not ready
     property <bool> blocked: Printer.conn != Conn.ready && Nav.page < 6;
 
     VerticalLayout {
@@ -106,7 +106,7 @@ export component AppWindow inherits Window {
                     for item[i] in root.nav-items: NavItem {
                         icon: item.icon;
                         text: item.text;
-                        // Ustawienia (8) są podstroną Systemu
+                        // Settings (8) is a sub-page of System
                         active: Nav.page == i || (i == 7 && Nav.page == 8);
                         clicked => { Nav.page = i; }
                     }

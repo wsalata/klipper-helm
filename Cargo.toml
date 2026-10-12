@@ -2,11 +2,11 @@
 name = "klipper-helm"
 version = "0.1.0"
 edition = "2024"
-description = "Panel dotykowy dla Klippera (zamiennik KlipperScreen) w Rust + Slint"
+description = "Touch screen panel for Klipper (a KlipperScreen replacement) in Rust + Slint"
 
 [dependencies]
-# Domyślne funkcje (winit) pozwalają uruchamiać panel w oknie na PC,
-# linuxkms rysuje bezpośrednio na ekranie Raspberry Pi bez X11/Wayland.
+# The default features (winit) run the panel in a window on a PC;
+# linuxkms draws directly on the Raspberry Pi screen without X11/Wayland.
 slint = { version = "1.18", features = ["backend-linuxkms-noseat"] }
 tokio = { version = "1", features = ["rt", "macros", "sync", "time", "net"] }
 tokio-tungstenite = "0.30"
@@ -16,7 +16,7 @@ serde_json = "1"
 toml = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 anyhow = "1"
-# Miniaturki: HTTP bez TLS (Moonraker w sieci lokalnej) i dekodowanie PNG
+# Thumbnails: HTTP without TLS (Moonraker on the local network) and PNG decoding
 ureq = { version = "3", default-features = false }
 png = "0.18"
 

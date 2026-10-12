@@ -1,8 +1,8 @@
 import { Theme } from "theme.slint";
-import { Printer, Actions, Overlay, Nav, Conn, Settings } from "state.slint";
+import { Printer, Actions, Overlay, Nav, Conn, Settings, Strings } from "state.slint";
 import { Btn, BtnKind, Card, Caption, InfoRow, Thumb } from "widgets.slint";
 
-// Przyciemnione tło blokujące dotyk pod oknem.
+// Dimmed backdrop that blocks touches to the screen below.
 component Scrim inherits Rectangle {
     callback dismiss();
     background: #000000b0;
@@ -14,7 +14,7 @@ component Dialog inherits Rectangle {
     border-radius: 14px;
     border-width: 1px;
     border-color: Theme.border;
-    TouchArea {}  // pochłania kliknięcia, żeby nie zamykały okna
+    TouchArea {}  // swallows clicks so they do not close the dialog
 }
 
 export component NumpadDialog inherits Scrim {
@@ -68,13 +68,14 @@ export component NumpadDialog inherits Scrim {
                 spacing: 6px;
                 Btn { text: "C"; clicked => { Overlay.numpad-value = ""; } }
                 Btn { text: "0"; clicked => { root.press("0"); } }
-                if Overlay.numpad-purpose == "temp": Btn { text: "Wył."; font-size: Theme.font-s; clicked => { root.submit("0"); } }
-                if Overlay.numpad-purpose != "temp": Btn { text: "."; clicked => { root.press("."); } }
+                if Overlay.numpad-purpose == "temp": Btn { text: @tr("Off"); font-size: Theme.font-s; clicked => { root.submit("0"); } }
+                // The locale decimal separator, because to-float() parses with it ("," in Polish)
+                if Overlay.numpad-purpose != "temp": Btn { text: Platform.decimal-separator; clicked => { root.press(Platform.decimal-separator); } }
             }
             HorizontalLayout {
                 spacing: 6px;
-                Btn { text: "Anuluj"; kind: BtnKind.ghost; clicked => { Overlay.numpad-open = false; } }
-                Btn { text: "Ustaw"; kind: BtnKind.accent; clicked => { root.submit(Overlay.numpad-value); } }
+                Btn { text: @tr("Cancel"); kind: BtnKind.ghost; clicked => { Overlay.numpad-open = false; } }
+                Btn { text: @tr("Set"); kind: BtnKind.accent; clicked => { root.submit(Overlay.numpad-value); } }
             }
         }
     }
@@ -91,7 +92,7 @@ component TextKey inherits Btn {
     clicked => { Actions.text-key(self.text); }
 }
 
-// Edycja tekstu (adres, nazwy) z pełną klawiaturą ekranową.
+// Text editing (address, names) with a full on-screen keyboard.
 export component TextDialog inherits Scrim {
     dismiss => { Overlay.text-open = false; }
     property <bool> upper;
@@ -108,7 +109,7 @@ export component TextDialog inherits Scrim {
         height: min(root.height - 16px, 420px);
 
         fs := FocusScope {
-            // Fizyczna klawiatura (np. na PC)
+            // Physical keyboard (e.g. on a PC)
             key-pressed(e) => {
                 if (e.text == Key.Return) {
                     root.submit();
@@ -147,7 +148,7 @@ export component TextDialog inherits Scrim {
                 HorizontalLayout {
                     spacing: 4px;
                     for k in ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]: TextKey { key: k; }
-                    Btn { text: "Usuń"; font-size: Theme.font-s; min-height: 40px; horizontal-stretch: 1.5; clicked => { Actions.text-key("BS"); } }
+                    Btn { text: @tr("Delete"); font-size: Theme.font-s; min-height: 40px; horizontal-stretch: 1.5; clicked => { Actions.text-key("BS"); } }
                 }
                 HorizontalLayout {
                     spacing: 4px;
@@ -172,8 +173,8 @@ export component TextDialog inherits Scrim {
                 HorizontalLayout {
                     spacing: 4px;
                     Btn { text: "C"; font-size: Theme.font-s; min-height: 40px; clicked => { Actions.text-key("CLR"); } }
-                    Btn { text: "spacja"; font-size: Theme.font-s; min-height: 40px; horizontal-stretch: 4; clicked => { Actions.text-key(" "); } }
-                    Btn { text: "Anuluj"; kind: BtnKind.ghost; min-height: 40px; horizontal-stretch: 2; clicked => { Overlay.text-open = false; } }
+                    Btn { text: @tr("space"); font-size: Theme.font-s; min-height: 40px; horizontal-stretch: 4; clicked => { Actions.text-key(" "); } }
+                    Btn { text: @tr("Cancel"); kind: BtnKind.ghost; min-height: 40px; horizontal-stretch: 2; clicked => { Overlay.text-open = false; } }
                     Btn { text: "OK"; kind: BtnKind.accent; min-height: 40px; horizontal-stretch: 2; clicked => { root.submit(); } }
                 }
             }
@@ -217,9 +218,9 @@ export component ConfirmDialog inherits Scrim {
             }
             HorizontalLayout {
                 spacing: Theme.gap;
-                Btn { text: "Nie"; kind: BtnKind.ghost; clicked => { Overlay.confirm-open = false; } }
+                Btn { text: @tr("No"); kind: BtnKind.ghost; clicked => { Overlay.confirm-open = false; } }
                 Btn {
-                    text: "Tak";
+                    text: @tr("Yes");
                     kind: Overlay.confirm-action == "gcode" ? BtnKind.accent : BtnKind.danger;
                     clicked => {
                         Overlay.confirm-open = false;
@@ -257,18 +258,18 @@ export component FileDialog inherits Scrim {
                 }
                 VerticalLayout {
                     spacing: 10px;
-                    InfoRow { label: "Szacowany czas"; value: root.loaded ? Printer.details.estimated : "..."; }
-                    InfoRow { label: "Filament"; value: root.loaded ? Printer.details.filament : "..."; }
-                    InfoRow { label: "Wysokość warstwy"; value: root.loaded ? Printer.details.layer-height : "..."; }
-                    InfoRow { label: "Slicer"; value: root.loaded ? Printer.details.slicer : "..."; }
+                    InfoRow { label: @tr("Estimated time"); value: root.loaded ? Printer.details.estimated : "..."; }
+                    InfoRow { label: @tr("Filament"); value: root.loaded ? Printer.details.filament : "..."; }
+                    InfoRow { label: @tr("Layer height"); value: root.loaded ? Printer.details.layer-height : "..."; }
+                    InfoRow { label: @tr("Slicer"); value: root.loaded ? Printer.details.slicer : "..."; }
                     Rectangle { vertical-stretch: 1; }
                 }
             }
             HorizontalLayout {
                 spacing: Theme.gap;
-                Btn { text: "Zamknij"; kind: BtnKind.ghost; clicked => { Overlay.file-open = false; } }
+                Btn { text: @tr("Close"); kind: BtnKind.ghost; clicked => { Overlay.file-open = false; } }
                 Btn {
-                    text: "Drukuj";
+                    text: @tr("Print");
                     kind: BtnKind.accent;
                     enabled: Printer.conn == Conn.ready && !Printer.printing;
                     clicked => {
@@ -282,7 +283,7 @@ export component FileDialog inherits Scrim {
     }
 }
 
-// Pokazywany zamiast ekranu, gdy Klipper nie jest gotowy lub brak połączenia.
+// Shown instead of a screen when Klipper is not ready or there is no connection.
 export component NotReadyPanel inherits Rectangle {
     background: Theme.bg;
     VerticalLayout {
@@ -290,14 +291,14 @@ export component NotReadyPanel inherits Rectangle {
         padding: 24px;
         spacing: 14px;
         Text {
-            text: Printer.status-label;
+            text: Strings.status(Printer.status);
             color: Printer.conn == Conn.connecting ? Theme.text : Theme.warn;
             font-size: Theme.font-l;
             font-weight: 700;
             horizontal-alignment: center;
         }
         Text {
-            text: Printer.status-message;
+            text: Strings.status-message();
             color: Theme.text-dim;
             wrap: word-wrap;
             horizontal-alignment: center;
@@ -305,8 +306,8 @@ export component NotReadyPanel inherits Rectangle {
         if Printer.conn == Conn.not-ready: HorizontalLayout {
             alignment: center;
             spacing: Theme.gap;
-            Btn { text: "Restart"; width: 200px; clicked => { Actions.restart(); } }
-            Btn { text: "Restart firmware"; kind: BtnKind.accent; width: 220px; clicked => { Actions.firmware-restart(); } }
+            Btn { text: @tr("Restart"); width: 200px; clicked => { Actions.restart(); } }
+            Btn { text: @tr("Firmware restart"); kind: BtnKind.accent; width: 220px; clicked => { Actions.firmware-restart(); } }
         }
     }
 }

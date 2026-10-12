@@ -1,8 +1,8 @@
-//! Udawany Moonraker do pracy nad UI bez drukarki.
-//! Uruchom: `cargo run --example mock_moonraker`, potem
+//! Fake Moonraker for working on the UI without a printer.
+//! Run: `cargo run --example mock_moonraker`, then
 //! `MOONRAKER_URL=ws://127.0.0.1:7125/websocket cargo run`.
-//! Symuluje nagrzewanie, wydruk w toku, odpowiedzi na G-code i miniaturki plików
-//! (serwowane przez HTTP na tym samym porcie, jak w prawdziwym Moonrakerze).
+//! Simulates heating, a print in progress, G-code responses and file thumbnails
+//! (served over HTTP on the same port, like the real Moonraker).
 
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
@@ -10,12 +10,12 @@ use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
-/// (ścieżka, czas modyfikacji, rozmiar, czy ma miniaturki)
+/// (path, modification time, size, has thumbnails)
 const FILES: &[(&str, f64, u64, bool)] = &[
     ("benchy_0.2mm_PLA.gcode", 1760200000.0, 4_200_000, true),
     ("calibration/cube_20mm.gcode", 1760100000.0, 820_000, true),
     ("voron_logo_PETG.gcode", 1759900000.0, 2_500_000, true),
-    ("stary_plik_bez_miniaturki.gcode", 1750000000.0, 150_000, false),
+    ("old_file_without_thumbnail.gcode", 1750000000.0, 150_000, false),
 ];
 use tokio_tungstenite::{accept_async, tungstenite::Message};
 
@@ -23,13 +23,13 @@ use tokio_tungstenite::{accept_async, tungstenite::Message};
 async fn main() -> anyhow::Result<()> {
     let addr = std::env::args().nth(1).unwrap_or_else(|| "127.0.0.1:7125".into());
     let listener = TcpListener::bind(&addr).await?;
-    println!("Mock Moonraker na ws://{addr}/websocket");
+    println!("Mock Moonraker on ws://{addr}/websocket");
     loop {
         let (stream, peer) = listener.accept().await?;
-        println!("Klient: {peer}");
+        println!("Client: {peer}");
         tokio::spawn(async move {
             if let Err(e) = client(stream).await {
-                println!("Klient {peer}: {e}");
+                println!("Client {peer}: {e}");
             }
         });
     }
@@ -220,7 +220,7 @@ fn metadata(filename: &str) -> Value {
     })
 }
 
-/// GET /server/files/gcodes/.../.thumbs/<nazwa>-<W>x<H>.png
+/// GET /server/files/gcodes/.../.thumbs/<name>-<W>x<H>.png
 async fn serve_thumb(mut stream: TcpStream) -> anyhow::Result<()> {
     let mut request = Vec::new();
     let mut buf = [0u8; 1024];
@@ -249,7 +249,7 @@ async fn serve_thumb(mut stream: TcpStream) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Udawany render wydruku: kolorowa kula na podstawce, przezroczyste tło jak w slicerach.
+/// Fake print render: a coloured ball on a base, transparent background like slicers produce.
 fn render_thumb(stem: &str, size: u32) -> anyhow::Result<Vec<u8>> {
     let hash = stem.bytes().fold(7u32, |h, b| h.wrapping_mul(31).wrapping_add(b as u32));
     let hue = (hash % 360) as f32;
@@ -261,7 +261,7 @@ fn render_thumb(stem: &str, size: u32) -> anyhow::Result<Vec<u8>> {
             let (u, v) = ((x as f32 + 0.5) / size as f32, (y as f32 + 0.5) / size as f32);
             let (dx, dy) = (u - 0.5, v - 0.47);
             let px = if dx * dx + dy * dy < 0.31 * 0.31 {
-                // Światło z lewej góry
+                // Light from the top left
                 let shade = 0.65 - ((u - 0.38).powi(2) + (v - 0.33).powi(2)).sqrt() * 0.8;
                 color(shade.clamp(0.2, 0.75))
             } else if (0.78..0.9).contains(&v) && (0.14..0.86).contains(&u) {

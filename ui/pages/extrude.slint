@@ -1,12 +1,12 @@
 import { Theme } from "../theme.slint";
-import { Printer, Actions, Overlay, Fan } from "../state.slint";
+import { Printer, Actions, Overlay, Fan, Strings } from "../state.slint";
 import { Btn, BtnKind, Card, Caption, Segmented, Bar } from "../widgets.slint";
 
 component FanRow inherits VerticalLayout {
     in property <Fan> fan;
     spacing: 6px;
     HorizontalLayout {
-        Text { text: root.fan.name; color: Theme.text; overflow: elide; horizontal-stretch: 1; }
+        Text { text: Strings.fan-name(root.fan); color: Theme.text; overflow: elide; horizontal-stretch: 1; }
         Text { text: round(root.fan.speed * 100) + "%"; color: Theme.text; font-weight: 700; horizontal-stretch: 0; }
     }
     if root.fan.settable: HorizontalLayout {
@@ -42,22 +42,22 @@ export component ExtrudePage inherits Rectangle {
                 HorizontalLayout {
                     spacing: 12px;
                     Text {
-                        text: "Dysza " + round(Printer.extruder-temp) + "°";
+                        text: @tr("Nozzle {}°", round(Printer.extruder-temp));
                         color: Theme.text;
                         font-size: Theme.font-l;
                         font-weight: 700;
                         horizontal-stretch: 0;
                     }
                     Caption {
-                        text: root.cold ? "Za zimno na ekstruzję (min. 170°)" : "";
+                        text: root.cold ? @tr("Too cold to extrude (min. 170°)") : "";
                         color: Theme.warn;
                         horizontal-stretch: 1;
                     }
                 }
 
-                Caption { text: "Długość [mm]"; }
+                Caption { text: @tr("Length [mm]"); }
                 Segmented { items: ["1", "5", "10", "25", "50"]; selected <=> root.length-index; }
-                Caption { text: "Prędkość [mm/s]"; }
+                Caption { text: @tr("Speed [mm/s]"); }
                 Segmented { items: ["1", "2", "5", "10"]; selected <=> root.speed-index; }
 
                 Rectangle { vertical-stretch: 1; }
@@ -65,13 +65,13 @@ export component ExtrudePage inherits Rectangle {
                 HorizontalLayout {
                     spacing: Theme.gap;
                     Btn {
-                        text: "Wycofaj";
+                        text: @tr("Retract");
                         icon: @image-url("../icons/up.svg");
                         enabled: !root.cold && !Printer.printing;
                         clicked => { Actions.extrude(-root.lengths[root.length-index], root.speeds[root.speed-index]); }
                     }
                     Btn {
-                        text: "Ekstruduj";
+                        text: @tr("Extrude");
                         kind: BtnKind.accent;
                         icon: @image-url("../icons/down.svg");
                         enabled: !root.cold && !Printer.printing;
@@ -90,7 +90,7 @@ export component ExtrudePage inherits Rectangle {
                 HorizontalLayout {
                     spacing: 8px;
                     Image { source: @image-url("../icons/fan.svg"); colorize: Theme.text-dim; width: 20px; height: 20px; }
-                    Caption { text: "Wentylatory"; }
+                    Caption { text: @tr("Fans"); }
                 }
                 for f in Printer.fans: FanRow { fan: f; }
             }

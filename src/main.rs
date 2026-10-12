@@ -21,13 +21,17 @@ fn main() -> anyhow::Result<()> {
     let printer = ui.global::<Printer>();
     printer.set_moonraker_url(cfg.moonraker_url.as_str().into());
     printer.set_presets(ModelRc::new(VecModel::from(settings::presets_model(&cfg.presets))));
-    // Listy aktualizowane w miejscu przez bridge::sync
+    // Lists updated in place by bridge::sync
     printer.set_heaters(ModelRc::new(VecModel::<Heater>::default()));
+    printer.set_top_heaters(ModelRc::new(VecModel::<Heater>::default()));
     printer.set_sensors(ModelRc::new(VecModel::<Heater>::default()));
     printer.set_fans(ModelRc::new(VecModel::<Fan>::default()));
     printer.set_files(ModelRc::new(VecModel::<FileEntry>::default()));
     printer.set_macros(ModelRc::new(VecModel::<SharedString>::default()));
     printer.set_console(ModelRc::new(VecModel::<ConsoleLine>::default()));
+
+    // Must run after the first component exists
+    settings::apply_language(&cfg.language);
 
     let (tx, rx) = mpsc::unbounded_channel::<Command>();
     wire_actions(&ui, &tx);
@@ -43,7 +47,7 @@ fn main() -> anyhow::Result<()> {
     tick();
     clock.start(TimerMode::Repeated, Duration::from_secs(1), tick);
 
-    // Sieć działa w osobnym wątku z tokio, UI (Slint) musi zostać w wątku głównym
+    // Networking runs in its own thread with tokio; the UI (Slint) must stay on the main thread
     let weak = ui.as_weak();
     let net = std::thread::spawn(move || {
         let rt = tokio::runtime::Builder::new_current_thread()
@@ -57,7 +61,7 @@ fn main() -> anyhow::Result<()> {
     let _snapshots = std::env::var("KLIPPER_HELM_SNAPSHOT").ok().map(|dir| snapshot_pages(&ui, dir));
 
     ui.run()?;
-    // Zamknięcie kanału kończy wątek sieciowy
+    // Closing the channel ends the network thread
     drop(ui);
     drop(tx);
     let _ = net.join();
@@ -96,7 +100,7 @@ fn wire_actions(ui: &AppWindow, tx: &UnboundedSender<Command>) {
     on!(on_host_reboot, || Command::HostReboot);
     on!(on_host_shutdown, || Command::HostShutdown);
 
-    // Edycja linii konsoli odbywa się lokalnie, do sieci idzie dopiero ENTER
+    // The console line is edited locally; only ENTER sends it to the network
     let weak = ui.as_weak();
     let tx = tx.clone();
     actions.on_console_key(move |key| {
@@ -115,7 +119,7 @@ fn wire_actions(ui: &AppWindow, tx: &UnboundedSender<Command>) {
         printer.set_console_input(line.into());
     });
 
-    // Okno edycji tekstu (ustawienia)
+    // Text editor dialog (settings)
     let weak = ui.as_weak();
     actions.on_text_key(move |key| {
         let Some(ui) = weak.upgrade() else { return };
@@ -126,21 +130,21 @@ fn wire_actions(ui: &AppWindow, tx: &UnboundedSender<Command>) {
     });
 }
 
-/// Wspólna obsługa klawiszy edycji: BS, CLR albo znaki do dopisania.
+/// Shared handling of editing keys: BS, CLR or characters to append.
 fn edit_line(line: &mut String, key: &str) {
     match key {
         "BS" => {
             line.pop();
         }
         "CLR" => line.clear(),
-        // Ignorujemy klawisze sterujące z fizycznej klawiatury
+        // Ignore control keys from a physical keyboard
         k if k.chars().all(|c| !c.is_control()) => line.push_str(k),
         _ => {}
     }
 }
 
-/// Tylko w buildzie debug: przechodzi przez kolejne widoki (ekrany, okna),
-/// zapisuje każdy jako `page-N.ppm` w podanym katalogu i zamyka aplikację.
+/// Debug builds only: steps through the views (screens, dialogs), saves each one
+/// as `page-N.ppm` in the given directory and quits.
 #[cfg(debug_assertions)]
 fn snapshot_pages(ui: &AppWindow, dir: String) -> Timer {
     type Step = Box<dyn Fn(&AppWindow)>;
@@ -160,11 +164,11 @@ fn snapshot_pages(ui: &AppWindow, dir: String) -> Timer {
     }));
     steps.push(Box::new(|ui| {
         let url = ui.global::<Settings>().get_url();
-        ui.global::<Overlay>().invoke_ask_text("url".into(), "Adres Moonrakera".into(), url);
+        ui.global::<Overlay>().invoke_ask_text("url".into(), "Moonraker address".into(), url);
     }));
     steps.push(Box::new(|ui| {
         ui.global::<Overlay>().set_text_open(false);
-        ui.global::<Overlay>().invoke_ask_number("xy".into(), "Prędkość XY [mm/s]".into(), 100.0, " mm/s".into());
+        ui.global::<Overlay>().invoke_ask_number("xy".into(), "XY speed [mm/s]".into(), 100.0, " mm/s".into());
     }));
 
     let weak = ui.as_weak();
@@ -172,7 +176,7 @@ fn snapshot_pages(ui: &AppWindow, dir: String) -> Timer {
     let timer = Timer::default();
     timer.start(TimerMode::Repeated, Duration::from_millis(1500), move || {
         let Some(ui) = weak.upgrade() else { return };
-        // Pierwszy krok czeka na dane z Moonrakera
+        // The first step waits for data from Moonraker
         if step > 0 {
             let n = step - 1;
             match ui.window().take_snapshot() {
@@ -184,7 +188,7 @@ fn snapshot_pages(ui: &AppWindow, dir: String) -> Timer {
                         eprintln!("{path}: {e}");
                     }
                 }
-                Err(e) => eprintln!("Zrzut ekranu: {e}"),
+                Err(e) => eprintln!("Snapshot: {e}"),
             }
         }
         match steps.get(step) {

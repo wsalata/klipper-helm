@@ -1,9 +1,9 @@
-//! Klient JSON-RPC Moonrakera po WebSockecie z automatycznym wznawianiem połączenia.
+//! Moonraker JSON-RPC client over WebSocket with automatic reconnection.
 
 use crate::config::Config;
 use crate::printer::{self, Objects, PrinterModel};
 use crate::thumbs::{Size, Thumbs};
-use crate::{AppWindow, Conn, ConsoleLine, bridge};
+use crate::{AppWindow, Conn, ConsoleLine, Status, bridge};
 use anyhow::bail;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
@@ -15,16 +15,16 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async, tungstenite::Message};
 
 const RETRY: Duration = Duration::from_secs(2);
-/// Zły adres nie może blokować zmiany ustawień na długie minuty
+/// A wrong address must not block changing the settings for minutes
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
-/// Moonraker wysyła notify_proc_stat_update co sekundę, więc cisza oznacza zerwane połączenie.
+/// Moonraker sends notify_proc_stat_update every second, so silence means a dead connection.
 const SILENCE_TIMEOUT: Duration = Duration::from_secs(15);
-/// Dla tylu najnowszych plików pobieramy miniaturki na listę
+/// Thumbnails for the file list are fetched for this many newest files
 const LIST_THUMBS: usize = 100;
 
 pub enum Command {
     Gcode(String),
-    /// G-code wpisany w konsoli (echo w historii)
+    /// G-code typed in the console (echoed into the history)
     Console(String),
     SetTemp(String, f32),
     SetFan(String, f32),
@@ -41,11 +41,11 @@ pub enum Command {
     StartPrint(String),
     HostReboot,
     HostShutdown,
-    /// Nowe ustawienia z panelu; zmiana adresu oznacza ponowne połączenie
+    /// New settings from the panel; a changed address means reconnecting
     Reconfigure(Config),
 }
 
-/// Na co czeka dane zapytanie, żeby wiedzieć, jak obsłużyć odpowiedź.
+/// What a request is waiting for, so we know how to handle the response.
 enum Pending {
     Ignore,
     Action,
@@ -57,7 +57,7 @@ enum Pending {
     FileList,
     FileMeta(String),
     JobMeta(String),
-    /// Metadane potrzebne tylko do miniaturki na liście plików
+    /// Metadata needed only for the thumbnail in the file list
     ListMeta(String),
 }
 
@@ -72,41 +72,36 @@ type Ws = WebSocketStream<MaybeTlsStream<TcpStream>>;
 pub async fn run(mut cfg: Config, ui: Weak<AppWindow>, mut rx: UnboundedReceiver<Command>) {
     let mut thumbs = Thumbs::new(&cfg.moonraker_url);
     loop {
-        bridge::conn(&ui, Conn::Connecting, "Łączenie...", cfg.moonraker_url.clone());
+        bridge::conn(&ui, Conn::Connecting, Status::Connecting);
         let mut next = None;
         match tokio::time::timeout(CONNECT_TIMEOUT, connect_async(cfg.moonraker_url.as_str())).await {
             Ok(Ok((ws, _))) => {
                 let mut session = Session::new(ws, cfg.clone(), ui.clone(), &mut thumbs);
                 match session.run(&mut rx).await {
                     Ok(Exit::Quit) => return,
-                    Ok(Exit::Lost) => eprintln!("Moonraker: połączenie zamknięte"),
+                    Ok(Exit::Lost) => eprintln!("Moonraker: connection closed"),
                     Ok(Exit::Reconnect(new)) => next = Some(new),
                     Err(e) => eprintln!("Moonraker: {e}"),
                 }
             }
             Ok(Err(e)) => eprintln!("Moonraker {}: {e}", cfg.moonraker_url),
-            Err(_) => eprintln!("Moonraker {}: przekroczony czas łączenia", cfg.moonraker_url),
+            Err(_) => eprintln!("Moonraker {}: connection timed out", cfg.moonraker_url),
         }
 
         if next.is_none() {
-            bridge::conn(
-                &ui,
-                Conn::Disconnected,
-                "Brak połączenia",
-                format!("Nie można połączyć z Moonrakerem ({})", cfg.moonraker_url),
-            );
+            bridge::conn(&ui, Conn::Disconnected, Status::Disconnected);
             let deadline = tokio::time::Instant::now() + RETRY;
             loop {
                 tokio::select! {
                     _ = tokio::time::sleep_until(deadline) => break,
                     cmd = rx.recv() => match cmd {
                         None => return,
-                        // Poprawiony adres: łączymy od razu
+                        // Corrected address: connect right away
                         Some(Command::Reconfigure(new)) => {
                             next = Some(new);
                             break;
                         }
-                        Some(_) => bridge::toast(&ui, "Brak połączenia z Moonrakerem"),
+                        Some(_) => bridge::no_connection(&ui),
                     },
                 }
             }
@@ -114,7 +109,7 @@ pub async fn run(mut cfg: Config, ui: Weak<AppWindow>, mut rx: UnboundedReceiver
 
         if let Some(new) = next {
             if new.moonraker_url != cfg.moonraker_url {
-                // Inna drukarka: nic z poprzedniej nie może zostać na ekranie
+                // A different printer: nothing from the previous one may stay on screen
                 thumbs = Thumbs::new(&new.moonraker_url);
                 bridge::reset(&ui);
             }
@@ -205,9 +200,9 @@ impl<'a> Session<'a> {
                 }
                 _ = tick.tick() => {
                     if self.last_rx.elapsed() > SILENCE_TIMEOUT {
-                        bail!("brak danych od {}s", SILENCE_TIMEOUT.as_secs());
+                        bail!("no data for {}s", SILENCE_TIMEOUT.as_secs());
                     }
-                    // Klipper niegotowy: odpytujemy, aż wstanie
+                    // Klipper not ready: keep polling until it is up
                     if !self.model.subscribed && !self.discovering {
                         self.call("printer.info", json!({}), Pending::PrinterInfo).await?;
                     }
@@ -220,7 +215,7 @@ impl<'a> Session<'a> {
         let v: Value = match serde_json::from_str(text) {
             Ok(v) => v,
             Err(e) => {
-                eprintln!("Moonraker: niepoprawny JSON: {e}");
+                eprintln!("Moonraker: invalid JSON: {e}");
                 return Ok(());
             }
         };
@@ -233,7 +228,7 @@ impl<'a> Session<'a> {
         };
         match v.get("error") {
             Some(err) => {
-                let msg = err.get("message").and_then(Value::as_str).unwrap_or("nieznany błąd");
+                let msg = err.get("message").and_then(Value::as_str).unwrap_or("unknown error");
                 self.on_error(pending, msg.to_string());
                 Ok(())
             }
@@ -356,7 +351,7 @@ impl<'a> Session<'a> {
                 self.push_state();
             }
             Pending::ObjectsList | Pending::Subscribe => {
-                eprintln!("Moonraker: inicjalizacja nieudana: {msg}");
+                eprintln!("Moonraker: initialisation failed: {msg}");
                 self.discovering = false;
             }
             Pending::Gcode => {
@@ -384,7 +379,7 @@ impl<'a> Session<'a> {
                 return self.gcode(g).await;
             }
             Command::SetTemp(heater, target) => {
-                // Presety ustawiają też stół, którego drukarka może nie mieć
+                // Presets also set the bed, which the printer may not have
                 if !self.model.objects.has(&heater) {
                     return Ok(());
                 }
@@ -425,7 +420,7 @@ impl<'a> Session<'a> {
         self.call(&method, params, Pending::Action).await
     }
 
-    /// Pobiera metadane drukowanego pliku (szacowany czas, wysokość warstwy).
+    /// Fetches metadata of the file being printed (estimated time, layer height).
     async fn request_job_meta(&mut self) -> anyhow::Result<()> {
         let file = self.model.filename().to_string();
         if file.is_empty() || file == self.job_meta_requested {

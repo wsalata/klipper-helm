@@ -1,9 +1,9 @@
-//! Ekran Ustawienia: szkic konfiguracji w UI, walidacja, zapis do pliku
-//! i zastosowanie bez restartu panelu.
+//! Settings screen: the configuration draft in the UI, validation, saving to the file
+//! and applying it without restarting the panel.
 
 use crate::config::{self, Config};
 use crate::moonraker::Command;
-use crate::{AppWindow, Nav, Preset, Printer, Settings, bridge};
+use crate::{AppWindow, Messages, Nav, Preset, Printer, Settings, bridge};
 use slint::{ComponentHandle, Model, ModelRc, VecModel};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -16,6 +16,28 @@ pub fn presets_model(presets: &[config::Preset]) -> Vec<Preset> {
         .collect()
 }
 
+/// Switches the UI language live. "auto" follows LC_ALL / LC_MESSAGES / LANG;
+/// a language without a translation falls back to English.
+pub fn apply_language(language: &str) {
+    let code = match language {
+        "auto" | "" => system_language(),
+        other => other.to_string(),
+    };
+    if slint::select_bundled_translation(&code).is_err() {
+        let _ = slint::select_bundled_translation("");
+    }
+}
+
+fn system_language() -> String {
+    ["LC_ALL", "LC_MESSAGES", "LANG"]
+        .iter()
+        .filter_map(|var| std::env::var(var).ok())
+        .find(|v| !v.is_empty())
+        // "pl_PL.UTF-8" -> "pl"
+        .and_then(|v| v.split(['_', '.', '@']).next().map(str::to_lowercase))
+        .unwrap_or_default()
+}
+
 pub fn wire(ui: &AppWindow, cfg: Rc<RefCell<Config>>, tx: UnboundedSender<Command>) {
     let settings = ui.global::<Settings>();
 
@@ -26,11 +48,12 @@ pub fn wire(ui: &AppWindow, cfg: Rc<RefCell<Config>>, tx: UnboundedSender<Comman
         let s = ui.global::<Settings>();
         let cfg = current.borrow();
         s.set_url(cfg.moonraker_url.as_str().into());
+        s.set_language(cfg.language.as_str().into());
         s.set_xy_speed(cfg.xy_speed);
         s.set_z_speed(cfg.z_speed);
         s.set_presets(ModelRc::new(VecModel::from(presets_model(&cfg.presets))));
         s.set_config_path(Config::path().map(|p| p.display().to_string()).unwrap_or_default().into());
-        s.set_error("".into());
+        set_error(&s, "", "");
     });
 
     let weak = ui.as_weak();
@@ -64,10 +87,10 @@ pub fn wire(ui: &AppWindow, cfg: Rc<RefCell<Config>>, tx: UnboundedSender<Comman
     });
 
     let weak = ui.as_weak();
-    settings.on_preset_add(move || {
+    settings.on_preset_add(move |name| {
         let Some(ui) = weak.upgrade() else { return };
         with_presets(&ui.global::<Settings>(), |vm| {
-            vm.push(Preset { name: "Nowy".into(), extruder: 200.0, bed: 60.0 });
+            vm.push(Preset { name, extruder: 200.0, bed: 60.0 });
         });
     });
 
@@ -87,6 +110,7 @@ pub fn wire(ui: &AppWindow, cfg: Rc<RefCell<Config>>, tx: UnboundedSender<Comman
         let s = ui.global::<Settings>();
         let new = Config {
             moonraker_url: s.get_url().trim().to_string(),
+            language: s.get_language().to_string(),
             xy_speed: s.get_xy_speed(),
             z_speed: s.get_z_speed(),
             presets: s
@@ -96,29 +120,34 @@ pub fn wire(ui: &AppWindow, cfg: Rc<RefCell<Config>>, tx: UnboundedSender<Comman
                 .collect(),
         };
         if let Err(e) = new.validate() {
-            s.set_error(e.into());
+            set_error(&s, e.code, &e.arg);
             return;
         }
         if let Err(e) = new.save() {
-            s.set_error(format!("Nie udało się zapisać: {e}").into());
+            set_error(&s, "save", &e.to_string());
             return;
         }
 
-        // Zastosowanie: presety i adres w UI od razu, reszta w wątku sieciowym
+        // Apply: language, presets and address in the UI right away, the rest in the network thread
+        apply_language(&new.language);
         let printer = ui.global::<Printer>();
         bridge::sync(&printer.get_presets(), presets_model(&new.presets));
         printer.set_moonraker_url(new.moonraker_url.as_str().into());
         let _ = tx.send(Command::Reconfigure(new.clone()));
         *cfg.borrow_mut() = new;
 
-        s.set_error("".into());
+        set_error(&s, "", "");
         ui.global::<Nav>().set_page(7);
-        printer.set_toast_error(false);
-        printer.set_toast("Zapisano ustawienia".into());
+        ui.global::<Messages>().invoke_settings_saved();
     });
 }
 
-/// Dodawanie i usuwanie wierszy wymaga konkretnego VecModel (ustawianego w `load`).
+fn set_error(s: &Settings<'_>, code: &str, arg: &str) {
+    s.set_error_code(code.into());
+    s.set_error_arg(arg.into());
+}
+
+/// Adding and removing rows needs the concrete VecModel (set in `load`).
 fn with_presets(s: &Settings<'_>, f: impl FnOnce(&VecModel<Preset>)) {
     let model = s.get_presets();
     if let Some(vm) = model.as_any().downcast_ref::<VecModel<Preset>>() {
@@ -126,7 +155,7 @@ fn with_presets(s: &Settings<'_>, f: impl FnOnce(&VecModel<Preset>)) {
     }
 }
 
-/// id w formacie "pole:indeks", np. "ext:2"
+/// id in the form "field:index", e.g. "ext:2"
 fn edit_preset(s: &Settings<'_>, id: &str, change: impl FnOnce(&mut Preset, &str)) {
     let Some((field, index)) = id.split_once(':') else { return };
     let Ok(index) = index.parse::<usize>() else { return };

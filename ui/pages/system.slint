@@ -1,5 +1,5 @@
 import { Theme } from "../theme.slint";
-import { Printer, Overlay, Nav, Settings } from "../state.slint";
+import { Printer, Overlay, Nav, Settings, Strings } from "../state.slint";
 import { Btn, BtnKind, Card, Caption, InfoRow } from "../widgets.slint";
 
 export component SystemPage inherits Rectangle {
@@ -12,20 +12,20 @@ export component SystemPage inherits Rectangle {
             VerticalLayout {
                 padding: 12px;
                 spacing: 10px;
-                Caption { text: "Informacje"; }
-                InfoRow { label: "Host"; value: Printer.hostname; }
-                InfoRow { label: "Stan"; value: Printer.status-label; }
+                Caption { text: @tr("Information"); }
+                InfoRow { label: @tr("Host"); value: Printer.hostname; }
+                InfoRow { label: @tr("State"); value: Strings.status(Printer.status); }
                 InfoRow { label: "Klipper"; value: Printer.klipper-version; }
                 InfoRow { label: "Moonraker"; value: Printer.moonraker-url; }
-                if Printer.status-message != "": Text {
-                    text: Printer.status-message;
+                if Strings.status-message() != "": Text {
+                    text: Strings.status-message();
                     color: Theme.text-dim;
                     font-size: Theme.font-s;
                     wrap: word-wrap;
                 }
                 Rectangle { vertical-stretch: 1; }
                 Btn {
-                    text: "Ustawienia panelu";
+                    text: @tr("Panel settings");
                     icon: @image-url("../icons/system.svg");
                     clicked => {
                         Settings.load();
@@ -41,12 +41,12 @@ export component SystemPage inherits Rectangle {
                 padding: 12px;
                 spacing: Theme.gap;
                 Caption { text: "Klipper"; }
-                Btn { text: "Restart"; clicked => { Overlay.ask("Zrestartować Klippera?", "restart", ""); } }
-                Btn { text: "Restart firmware"; clicked => { Overlay.ask("Zrestartować firmware (MCU)?", "firmware-restart", ""); } }
+                Btn { text: @tr("Restart"); clicked => { Overlay.ask(@tr("Restart Klipper?"), "restart", ""); } }
+                Btn { text: @tr("Firmware restart"); clicked => { Overlay.ask(@tr("Restart the firmware (MCU)?"), "firmware-restart", ""); } }
                 Rectangle { vertical-stretch: 1; }
-                Caption { text: "Komputer"; }
-                Btn { text: "Uruchom ponownie"; clicked => { Overlay.ask("Uruchomić ponownie komputer drukarki?", "reboot", ""); } }
-                Btn { text: "Wyłącz"; kind: BtnKind.danger; clicked => { Overlay.ask("Wyłączyć komputer drukarki?", "shutdown", ""); } }
+                Caption { text: @tr("Computer"); }
+                Btn { text: @tr("Reboot"); clicked => { Overlay.ask(@tr("Reboot the printer computer?"), "reboot", ""); } }
+                Btn { text: @tr("Shut down"); kind: BtnKind.danger; clicked => { Overlay.ask(@tr("Shut down the printer computer?"), "shutdown", ""); } }
             }
         }
     }

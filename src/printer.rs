@@ -1,10 +1,11 @@
-//! Stan drukarki zbudowany z delt wysyłanych przez Moonrakera
-//! i jego przekształcenie na struktury wyświetlane w UI.
+//! Printer state built from the deltas Moonraker sends, and its conversion
+//! into the structures shown by the UI. Only codes and raw data go to the UI;
+//! translated labels are produced in Slint.
 
-use crate::{Conn, Fan, FileDetails, Heater, PrintJob, Position};
+use crate::{Conn, Fan, FileDetails, Heater, PrintJob, Position, Status};
 use serde_json::{Value, json};
 
-/// Obiekty Klippera wykryte przez `printer.objects.list`.
+/// Klipper objects discovered via `printer.objects.list`.
 #[derive(Default)]
 pub struct Objects {
     pub heaters: Vec<String>,
@@ -29,7 +30,7 @@ impl Objects {
                 _ => {}
             }
         }
-        // Dysze najpierw, potem stół, potem reszta
+        // Nozzles first, then the bed, then the rest
         o.heaters.sort_by_key(|h| (heater_rank(h), h.clone()));
         o.fans.sort_by_key(|f| (f != "fan", f.clone()));
         o.macros.sort();
@@ -72,24 +73,32 @@ fn heater_rank(name: &str) -> u8 {
     }
 }
 
-pub fn display_name(obj: &str) -> String {
+/// Role code, nozzle number and fallback name for a heater object.
+/// Known roles are labelled (and translated) in Slint; others use the config name.
+fn heater_label(obj: &str) -> (&'static str, i32, String) {
     match obj {
-        "extruder" => "Dysza".into(),
-        "heater_bed" => "Stół".into(),
-        "fan" => "Chłodzenie wydruku".into(),
-        o if o.starts_with("extruder") => format!("Dysza {}", o.trim_start_matches("extruder")),
-        o => {
-            let name = o.split_once(' ').map_or(o, |(_, n)| n).replace('_', " ");
-            let mut chars = name.chars();
-            chars
-                .next()
-                .map(|c| c.to_uppercase().chain(chars).collect())
-                .unwrap_or_default()
+        "extruder" => ("nozzle", 0, String::new()),
+        "heater_bed" => ("bed", 0, String::new()),
+        o if o.starts_with("extruder") => {
+            // extruder1 is the second nozzle
+            let n = o.trim_start_matches("extruder").parse::<i32>().map_or(0, |n| n + 1);
+            ("nozzle", n, String::new())
         }
+        o => ("", 0, pretty_name(o)),
     }
 }
 
-/// G-code ustawiający temperaturę docelową danego grzałki.
+/// "heater_generic chamber_heater" -> "Chamber heater"
+fn pretty_name(obj: &str) -> String {
+    let name = obj.split_once(' ').map_or(obj, |(_, n)| n).replace('_', " ");
+    let mut chars = name.chars();
+    chars
+        .next()
+        .map(|c| c.to_uppercase().chain(chars).collect())
+        .unwrap_or_default()
+}
+
+/// G-code that sets the target temperature of a heater.
 pub fn set_temp_gcode(obj: &str, target: f32) -> String {
     let target = target.max(0.0).round();
     match obj.split_once(' ') {
@@ -110,7 +119,7 @@ pub fn set_fan_gcode(obj: &str, speed: f32) -> Option<String> {
     }
 }
 
-/// Rekurencyjne scalanie: Moonraker wysyła tylko zmienione pola.
+/// Recursive merge: Moonraker only sends the fields that changed.
 pub fn merge(dst: &mut Value, src: &Value) {
     match (dst, src) {
         (Value::Object(d), Value::Object(s)) => {
@@ -122,12 +131,12 @@ pub fn merge(dst: &mut Value, src: &Value) {
     }
 }
 
-/// Wszystko, co trafia do UI po każdej aktualizacji stanu.
+/// Everything sent to the UI after each state update.
 pub struct Snapshot {
     pub conn: Conn,
-    pub status_label: String,
+    pub status: Status,
     pub status_message: String,
-    pub top_temps: String,
+    pub top_heaters: Vec<Heater>,
     pub heaters: Vec<Heater>,
     pub sensors: Vec<Heater>,
     pub fans: Vec<Fan>,
@@ -144,7 +153,7 @@ pub struct PrinterModel {
     pub klippy_state: String,
     pub klippy_message: String,
     pub subscribed: bool,
-    /// Metadane aktualnie drukowanego pliku: (ścieżka, metadane lub Null)
+    /// Metadata of the file being printed: (path, metadata or Null)
     pub job_meta: Option<(String, Value)>,
 }
 
@@ -175,34 +184,35 @@ impl PrinterModel {
         }
     }
 
-    fn status_label(&self) -> String {
+    fn status(&self) -> Status {
         if self.conn() != Conn::Ready {
             return match self.klippy_state.as_str() {
-                "startup" => "Klipper się uruchamia",
-                "shutdown" => "Klipper wyłączony",
-                "error" => "Błąd Klippera",
-                "ready" => "Łączenie z Klipperem...",
-                _ => "Klipper niedostępny",
-            }
-            .into();
+                "startup" => Status::KlipperStarting,
+                "shutdown" => Status::KlipperShutdown,
+                "error" => Status::KlipperError,
+                "ready" => Status::KlipperConnecting,
+                _ => Status::KlipperUnavailable,
+            };
         }
         match self.s("/print_stats/state") {
-            "printing" => "Drukuje",
-            "paused" => "Pauza",
-            "complete" => "Zakończono",
-            "cancelled" => "Anulowano",
-            "error" => "Błąd druku",
-            _ if self.s("/idle_timeout/state") == "Printing" => "Zajęta",
-            _ => "Gotowa",
+            "printing" => Status::Printing,
+            "paused" => Status::Paused,
+            "complete" => Status::Complete,
+            "cancelled" => Status::Cancelled,
+            "error" => Status::PrintError,
+            _ if self.s("/idle_timeout/state") == "Printing" => Status::Busy,
+            _ => Status::Ready,
         }
-        .into()
     }
 
     fn heater(&self, obj: &str, settable: bool) -> Heater {
         let p = |field: &str| self.f(&format!("/{obj}/{field}")).unwrap_or(0.0) as f32;
+        let (role, number, name) = heater_label(obj);
         Heater {
             id: obj.into(),
-            name: display_name(obj).into(),
+            role: role.into(),
+            number,
+            name: name.into(),
             temp: p("temperature"),
             target: p("target"),
             power: if obj.starts_with("temperature_fan") { p("speed") } else { p("power") },
@@ -219,7 +229,7 @@ impl PrinterModel {
             .or_else(|| self.f("/virtual_sdcard/progress"))
             .unwrap_or(0.0);
 
-        // Powyżej 10% ufamy postępowi w pliku, wcześniej szacunkowi slicera
+        // Above 10% we trust the file progress, before that the slicer estimate
         let file_eta = (progress > 0.0).then(|| duration / progress - duration);
         let slicer_eta = self.meta("estimated_time").map(|t| (t - duration).max(0.0));
         let remaining = match (file_eta, slicer_eta) {
@@ -271,7 +281,8 @@ impl PrinterModel {
             .iter()
             .map(|f| Fan {
                 id: f.as_str().into(),
-                name: display_name(f).into(),
+                role: if f == "fan" { "part".into() } else { "".into() },
+                name: pretty_name(f).into(),
                 speed: self.f(&format!("/{f}/speed")).unwrap_or(0.0) as f32,
                 settable: set_fan_gcode(f, 0.0).is_some(),
             })
@@ -291,23 +302,22 @@ impl PrinterModel {
             homed_z: homed.contains('z'),
         };
 
-        let top_temps = heaters
+        let top_heaters = heaters
             .iter()
             .filter(|h| h.id == "extruder" || h.id == "heater_bed")
-            .map(|h| format!("{} {:.0}/{:.0}°", h.name, h.temp, h.target))
-            .collect::<Vec<_>>()
-            .join("   ");
+            .cloned()
+            .collect();
 
         let extruder = heaters.iter().find(|h| h.id == "extruder");
         Snapshot {
             conn: self.conn(),
-            status_label: self.status_label(),
+            status: self.status(),
             status_message: if self.conn() == Conn::Ready {
                 String::new()
             } else {
                 self.klippy_message.clone()
             },
-            top_temps,
+            top_heaters,
             extruder_temp: extruder.map_or(0.0, |h| h.temp),
             has_extruder: extruder.is_some(),
             heaters,
@@ -342,16 +352,16 @@ fn fmt_time(epoch: f64) -> String {
         .unwrap_or_default()
 }
 
-/// Wiersz listy plików. Bez obrazka, bo `slint::Image` nie może opuścić wątku UI.
+/// File list row. No image here, because `slint::Image` cannot leave the UI thread.
 pub struct FileRow {
     pub path: String,
     pub size: String,
     pub modified: String,
-    /// Surowy czas modyfikacji, do rozpoznania nowej wersji pliku
+    /// Raw modification time, used to recognise a new version of the file
     pub stamp: Value,
 }
 
-/// Lista plików z `server.files.list`, najnowsze najpierw.
+/// File list from `server.files.list`, newest first.
 pub fn file_list(result: &Value) -> Vec<FileRow> {
     let mut files: Vec<(f64, FileRow)> = result
         .as_array()
@@ -391,5 +401,27 @@ pub fn file_details(path: &str, meta: &Value) -> FileDetails {
         }
         .into(),
         layer_height: num("layer_height").map_or_else(|| "-".into(), |h| format!("{h} mm")).into(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn heater_labels() {
+        assert_eq!(heater_label("extruder"), ("nozzle", 0, String::new()));
+        assert_eq!(heater_label("extruder1"), ("nozzle", 2, String::new()));
+        assert_eq!(heater_label("heater_bed"), ("bed", 0, String::new()));
+        assert_eq!(heater_label("heater_generic chamber_heater"), ("", 0, "Chamber heater".into()));
+    }
+
+    #[test]
+    fn heater_gcode() {
+        assert_eq!(set_temp_gcode("extruder", 210.4), "SET_HEATER_TEMPERATURE HEATER=extruder TARGET=210");
+        assert_eq!(
+            set_temp_gcode("temperature_fan chamber", 40.0),
+            "SET_TEMPERATURE_FAN_TARGET TEMPERATURE_FAN=chamber TARGET=40"
+        );
     }
 }

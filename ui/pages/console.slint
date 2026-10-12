@@ -13,13 +13,13 @@ component KbKey inherits Btn {
     clicked => { Actions.console-key(root.key); }
 }
 
-// Klawiatura pod G-code: wielkie litery, cyfry i kilka znaków specjalnych.
+// G-code keyboard: capital letters, digits and a few special characters.
 component GcodeKeyboard inherits VerticalLayout {
     spacing: 4px;
     HorizontalLayout {
         spacing: 4px;
         for k in ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]: KbKey { key: k; }
-        Btn { text: "Usuń"; font-size: Theme.font-s; min-height: 38px; horizontal-stretch: 1.5; clicked => { Actions.console-key("BS"); } }
+        Btn { text: @tr("Delete"); font-size: Theme.font-s; min-height: 38px; horizontal-stretch: 1.5; clicked => { Actions.console-key("BS"); } }
     }
     HorizontalLayout {
         spacing: 4px;
@@ -32,13 +32,13 @@ component GcodeKeyboard inherits VerticalLayout {
     HorizontalLayout {
         spacing: 4px;
         for k in ["Z", "X", "C", "V", "B", "N", "M", "."]: KbKey { key: k; }
-        Btn { text: "spacja"; font-size: Theme.font-s; min-height: 38px; horizontal-stretch: 2; clicked => { Actions.console-key(" "); } }
+        Btn { text: @tr("space"); font-size: Theme.font-s; min-height: 38px; horizontal-stretch: 2; clicked => { Actions.console-key(" "); } }
         Btn { text: "C"; font-size: Theme.font-s; min-height: 38px; clicked => { Actions.console-key("CLR"); } }
     }
 }
 
 export component ConsolePage inherits Rectangle {
-    // Fizyczna klawiatura (np. podczas pracy na PC)
+    // Physical keyboard (e.g. while working on a PC)
     fs := FocusScope {
         key-pressed(e) => {
             if (e.text == Key.Return) {
@@ -68,7 +68,7 @@ export component ConsolePage inherits Rectangle {
                         padding-left: 10px;
                         padding-right: 10px;
                         Text {
-                            text: Printer.console-input == "" ? "Wpisz komendę G-code..." : Printer.console-input;
+                            text: Printer.console-input == "" ? @tr("Type a G-code command...") : Printer.console-input;
                             color: Printer.console-input == "" ? Theme.text-dim : Theme.text;
                             font-family: Theme.mono;
                             vertical-alignment: center;
@@ -78,7 +78,7 @@ export component ConsolePage inherits Rectangle {
                     TouchArea { clicked => { fs.focus(); } }
                 }
                 Btn {
-                    text: "Wyślij";
+                    text: @tr("Send");
                     kind: BtnKind.accent;
                     width: 110px;
                     clicked => { Actions.console-key("ENTER"); }

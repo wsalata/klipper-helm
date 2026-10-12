@@ -46,14 +46,14 @@ export component FilesPage inherits Rectangle {
         HorizontalLayout {
             spacing: Theme.gap;
             Text {
-                text: "Pliki G-code (" + Printer.files.length + ")";
+                text: @tr("G-code files ({})", Printer.files.length);
                 color: Theme.text;
                 font-size: Theme.font-m;
                 vertical-alignment: center;
                 horizontal-stretch: 1;
             }
             Btn {
-                text: "Odśwież";
+                text: @tr("Refresh");
                 icon: @image-url("../icons/refresh.svg");
                 width: 140px;
                 clicked => { Actions.refresh-files(); }
@@ -63,7 +63,7 @@ export component FilesPage inherits Rectangle {
         Card {
             vertical-stretch: 1;
             if Printer.files.length == 0: Caption {
-                text: "Brak plików";
+                text: @tr("No files");
                 horizontal-alignment: center;
             }
             ListView {

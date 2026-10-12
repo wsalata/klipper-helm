@@ -8,7 +8,7 @@ component AxisLabel inherits VerticalLayout {
     in property <bool> homed;
     alignment: center;
     Caption {
-        text: root.axis + (root.homed ? "" : "  (nie zbazowano)");
+        text: root.homed ? root.axis : @tr("{}  (not homed)", root.axis);
         color: root.homed ? Theme.text-dim : Theme.warn;
         horizontal-alignment: center;
     }
@@ -76,7 +76,7 @@ export component MovePage inherits Rectangle {
 
             HorizontalLayout {
                 spacing: Theme.gap;
-                Caption { text: "Krok [mm]"; horizontal-stretch: 0; }
+                Caption { text: @tr("Step [mm]"); horizontal-stretch: 0; }
                 Segmented {
                     items: ["0.1", "1", "10", "50"];
                     selected <=> root.step-index;
@@ -89,14 +89,14 @@ export component MovePage inherits Rectangle {
             VerticalLayout {
                 padding: Theme.gap;
                 spacing: Theme.gap;
-                Caption { text: "Bazowanie"; }
-                Btn { text: "Wszystkie"; kind: BtnKind.accent; icon: @image-url("../icons/home.svg"); clicked => { Actions.gcode("G28"); } }
+                Caption { text: @tr("Homing"); }
+                Btn { text: @tr("All"); kind: BtnKind.accent; icon: @image-url("../icons/home.svg"); clicked => { Actions.gcode("G28"); } }
                 Btn { text: "X"; clicked => { Actions.gcode("G28 X"); } }
                 Btn { text: "Y"; clicked => { Actions.gcode("G28 Y"); } }
                 Btn { text: "Z"; clicked => { Actions.gcode("G28 Z"); } }
                 Rectangle { vertical-stretch: 1; }
                 Btn {
-                    text: "Wyłącz silniki";
+                    text: @tr("Motors off");
                     font-size: Theme.font-s;
                     enabled: !Printer.printing;
                     clicked => { Actions.gcode("M84"); }

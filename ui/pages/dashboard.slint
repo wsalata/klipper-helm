@@ -1,8 +1,8 @@
 import { Theme } from "../theme.slint";
-import { Printer, Actions, Overlay, Nav } from "../state.slint";
+import { Printer, Actions, Overlay, Nav, Strings } from "../state.slint";
 import { Btn, BtnKind, Card, Caption, Bar, HeaterTile, InfoRow, Thumb } from "../widgets.slint";
 
-// Krokowa regulacja wartości w trakcie druku (prędkość, przepływ, Z-offset).
+// Step adjustment during a print (speed, flow, Z offset).
 component Stepper inherits Card {
     in property <string> label;
     in property <string> value;
@@ -44,12 +44,12 @@ export component DashboardPage inherits Rectangle {
         Card {
             vertical-stretch: 1;
 
-            // Bezczynność: zaproszenie do wyboru pliku
+            // Idle: prompt to pick a file
             if !Printer.printing && Printer.job.filename == "": VerticalLayout {
                 alignment: center;
                 spacing: 12px;
                 Text {
-                    text: Printer.status-label;
+                    text: Strings.status(Printer.status);
                     font-size: Theme.font-l;
                     color: Theme.text;
                     horizontal-alignment: center;
@@ -57,7 +57,7 @@ export component DashboardPage inherits Rectangle {
                 HorizontalLayout {
                     alignment: center;
                     Btn {
-                        text: "Wybierz plik do druku";
+                        text: @tr("Choose a file to print");
                         kind: BtnKind.accent;
                         width: 280px;
                         clicked => { Nav.page = 4; }
@@ -65,7 +65,7 @@ export component DashboardPage inherits Rectangle {
                 }
             }
 
-            // Druk trwa lub właśnie się zakończył
+            // A print is running or has just finished
             if Printer.printing || Printer.job.filename != "": VerticalLayout {
                 padding: 12px;
                 spacing: 8px;
@@ -110,17 +110,17 @@ export component DashboardPage inherits Rectangle {
                             spacing: 24px;
                             VerticalLayout {
                                 spacing: 4px;
-                                InfoRow { label: "Czas"; value: Printer.job.elapsed; }
-                                InfoRow { label: "Pozostało"; value: Printer.job.remaining; }
+                                InfoRow { label: @tr("Elapsed"); value: Printer.job.elapsed; }
+                                InfoRow { label: @tr("Remaining"); value: Printer.job.remaining; }
                             }
                             VerticalLayout {
                                 spacing: 4px;
-                                InfoRow { label: "Warstwa"; value: Printer.job.layer; }
+                                InfoRow { label: @tr("Layer"); value: Printer.job.layer; }
                                 InfoRow { label: "Z"; value: Printer.position.z; }
                             }
                             VerticalLayout {
                                 spacing: 4px;
-                                InfoRow { label: "Filament"; value: Printer.job.filament; }
+                                InfoRow { label: @tr("Filament"); value: Printer.job.filament; }
                                 InfoRow { label: "Z-offset"; value: Printer.job.z-offset; }
                             }
                         }
@@ -131,30 +131,30 @@ export component DashboardPage inherits Rectangle {
                 if Printer.printing: HorizontalLayout {
                     spacing: Theme.gap;
                     if Printer.job.state == "printing": Btn {
-                        text: "Pauza";
+                        text: @tr("Pause");
                         kind: BtnKind.normal;
                         clicked => { Actions.pause(); }
                     }
                     if Printer.job.state == "paused": Btn {
-                        text: "Wznów";
+                        text: @tr("Resume");
                         kind: BtnKind.accent;
                         clicked => { Actions.resume(); }
                     }
                     Btn {
-                        text: "Anuluj druk";
+                        text: @tr("Cancel print");
                         kind: BtnKind.danger;
-                        clicked => { Overlay.ask("Anulować bieżący wydruk?", "cancel", ""); }
+                        clicked => { Overlay.ask(@tr("Cancel the current print?"), "cancel", ""); }
                     }
                 }
                 if !Printer.printing: HorizontalLayout {
                     spacing: Theme.gap;
                     Btn {
-                        text: "Drukuj ponownie";
+                        text: @tr("Print again");
                         kind: BtnKind.accent;
                         clicked => { Overlay.open-file(Printer.job.filename); Actions.file-details(Printer.job.filename); }
                     }
                     Btn {
-                        text: "Wybierz inny plik";
+                        text: @tr("Choose another file");
                         clicked => { Nav.page = 4; }
                     }
                 }
@@ -165,13 +165,13 @@ export component DashboardPage inherits Rectangle {
             spacing: Theme.gap;
             height: 64px;
             Stepper {
-                label: "Prędkość";
+                label: @tr("Speed");
                 value: Printer.job.speed-factor + "%";
                 minus => { Actions.gcode("M220 S" + max(10, Printer.job.speed-factor - 10)); }
                 plus => { Actions.gcode("M220 S" + (Printer.job.speed-factor + 10)); }
             }
             Stepper {
-                label: "Przepływ";
+                label: @tr("Flow");
                 value: Printer.job.flow-factor + "%";
                 minus => { Actions.gcode("M221 S" + max(50, Printer.job.flow-factor - 1)); }
                 plus => { Actions.gcode("M221 S" + (Printer.job.flow-factor + 1)); }

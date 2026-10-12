@@ -1,5 +1,5 @@
 import { Theme } from "theme.slint";
-import { Heater } from "state.slint";
+import { Heater, Strings } from "state.slint";
 
 export enum BtnKind { normal, accent, danger, ghost }
 
@@ -59,7 +59,7 @@ export component Btn inherits Rectangle {
     }
 }
 
-// Miniaturka wydruku; slicery zapisują je z przezroczystym tłem.
+// Print thumbnail; slicers render them on a transparent background.
 export component Thumb inherits Rectangle {
     in property <image> source;
     background: Theme.surface-2;
@@ -84,7 +84,7 @@ export component Caption inherits Text {
     vertical-alignment: center;
 }
 
-// Wybór jednej z kilku opcji (np. krok ruchu).
+// Pick one of several options (e.g. the jog step).
 export component Segmented inherits HorizontalLayout {
     in property <[string]> items;
     in-out property <int> selected;
@@ -125,7 +125,7 @@ export component HeaterTile inherits Rectangle {
         padding: 10px;
         spacing: 2px;
         Text {
-            text: root.heater.name;
+            text: Strings.heater-name(root.heater);
             color: Theme.text-dim;
             font-size: Theme.font-s;
             overflow: elide;
@@ -137,7 +137,7 @@ export component HeaterTile inherits Rectangle {
             font-weight: 700;
         }
         Text {
-            text: root.heater.target > 0 ? "cel " + round(root.heater.target) + "°" : "wyłączony";
+            text: root.heater.target > 0 ? @tr("target {}°", round(root.heater.target)) : @tr("off");
             color: root.heater.target > 0 ? Theme.hot : Theme.text-dim;
             font-size: Theme.font-s;
         }
@@ -188,7 +188,7 @@ export component NavItem inherits Rectangle {
     ta := TouchArea { clicked => { root.clicked(); } }
 }
 
-// Wiersz "etykieta  wartość" do kart informacyjnych.
+// "label  value" row for info cards.
 export component InfoRow inherits HorizontalLayout {
     in property <string> label;
     in property <string> value;

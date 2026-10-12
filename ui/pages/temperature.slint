@@ -1,5 +1,5 @@
 import { Theme } from "../theme.slint";
-import { Printer, Actions, Overlay, Heater } from "../state.slint";
+import { Printer, Actions, Overlay, Heater, Strings } from "../state.slint";
 import { Btn, BtnKind, Card, Caption, Bar } from "../widgets.slint";
 import { ScrollView } from "std-widgets.slint";
 
@@ -16,7 +16,7 @@ component HeaterRow inherits Rectangle {
             alignment: center;
             spacing: 4px;
             horizontal-stretch: 1;
-            Text { text: root.heater.name; color: Theme.text; overflow: elide; }
+            Text { text: Strings.heater-name(root.heater); color: Theme.text; overflow: elide; }
             if root.heater.settable: Bar { value: root.heater.power; fill: Theme.hot; }
         }
         Text {
@@ -35,7 +35,7 @@ component HeaterRow inherits Rectangle {
             border-width: root.heater.target > 0 ? 2px : 0px;
             border-color: Theme.hot;
             Text {
-                text: root.heater.target > 0 ? round(root.heater.target) + "°" : "wył.";
+                text: root.heater.target > 0 ? round(root.heater.target) + "°" : @tr("off");
                 color: root.heater.target > 0 ? Theme.hot : Theme.text-dim;
                 font-size: Theme.font-m;
             }
@@ -75,7 +75,7 @@ export component TemperaturePage inherits Rectangle {
             VerticalLayout {
                 padding: Theme.gap;
                 spacing: Theme.gap;
-                Caption { text: "Presety"; }
+                Caption { text: @tr("Presets"); }
                 for p in Printer.presets: Btn {
                     text: p.name;
                     clicked => {
@@ -85,7 +85,7 @@ export component TemperaturePage inherits Rectangle {
                 }
                 Rectangle { vertical-stretch: 1; }
                 Btn {
-                    text: "Wyłącz grzanie";
+                    text: @tr("Heaters off");
                     kind: BtnKind.danger;
                     font-size: Theme.font-s;
                     clicked => { Actions.gcode("TURN_OFF_HEATERS"); }

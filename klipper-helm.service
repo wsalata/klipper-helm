@@ -1,5 +1,5 @@
 [Unit]
-Description=Klipper Helm (panel dotykowy Rust + Slint)
+Description=Klipper Helm (Rust + Slint touch screen panel)
 After=moonraker.service
 Wants=moonraker.service
 

@@ -1,31 +1,31 @@
 {
-    // Ctrl+Shift+P → "Tasks: Run Task" albo Ctrl+Shift+B (domyślny build)
+    // Ctrl+Shift+P → "Tasks: Run Task", or Ctrl+Shift+B (default build)
     "version": "2.0.0",
     "tasks": [
         {
             "label": "Mock Moonraker",
-            "detail": "Udawany Moonraker na 127.0.0.1:7125 (działa w tle)",
+            "detail": "Fake Moonraker on 127.0.0.1:7125 (runs in the background)",
             "type": "shell",
             "command": "cargo run --example mock_moonraker",
             "isBackground": true,
-            // Zadanie uznajemy za gotowe, gdy mock wypisze adres (potrzebne dla dependsOn/preLaunchTask)
+            // The task counts as ready once the mock prints its address (needed for dependsOn/preLaunchTask)
             "problemMatcher": {
                 "owner": "mock-moonraker",
                 "pattern": { "regexp": "^__never_matches__$" },
                 "background": {
                     "activesBegin": true,
                     "beginsPattern": "Compiling|Finished|Running",
-                    "endsPattern": "Mock Moonraker na ws://"
+                    "endsPattern": "Mock Moonraker on ws://"
                 }
             },
             "presentation": { "panel": "dedicated", "reveal": "silent" }
         },
         {
             "label": "Panel (mock)",
-            "detail": "Uruchamia mock i panel podłączony do niego",
+            "detail": "Starts the mock and a panel connected to it",
             "type": "shell",
             "command": "cargo run",
-            // Osobny plik ustawień, żeby nie mieszać mocka z prawdziwą drukarką
+            // Separate settings file, so the mock does not mix with a real printer
             "options": {
                 "env": {
                     "MOONRAKER_URL": "ws://127.0.0.1:7125/websocket",
@@ -37,8 +37,8 @@
             "presentation": { "panel": "dedicated" }
         },
         {
-            "label": "Panel (drukarka)",
-            "detail": "Normalne ustawienia (~/.config/klipper-helm); adres zmienisz w System → Ustawienia panelu",
+            "label": "Panel (printer)",
+            "detail": "Normal settings (~/.config/klipper-helm); change the address in System → Panel settings",
             "type": "shell",
             "command": "cargo run",
             "problemMatcher": ["$rustc"],

@@ -1,5 +1,5 @@
 {
-    // Debugowanie (F5) wymaga rozszerzenia CodeLLDB: vadimcorp.vscode-lldb
+    // Debugging (F5) needs the CodeLLDB extension: vadimcorp.vscode-lldb
     "version": "0.2.0",
     "configurations": [
         {
@@ -18,7 +18,7 @@
             "preLaunchTask": "Mock Moonraker"
         },
         {
-            "name": "Panel (drukarka)",
+            "name": "Panel (printer)",
             "type": "lldb",
             "request": "launch",
             "cargo": {

@@ -9,7 +9,7 @@ export component MacrosPage inherits Rectangle {
     property <length> cell-w: (root.width - root.pad * (root.cols + 1)) / root.cols;
 
     if Printer.macros.length == 0: Caption {
-        text: "Brak makr (gcode_macro bez prefiksu _)";
+        text: @tr("No macros (gcode_macro without a _ prefix)");
     }
 
     Flickable {
@@ -22,7 +22,7 @@ export component MacrosPage inherits Rectangle {
             height: root.row-h - root.pad;
             text: m;
             font-size: Theme.font-s;
-            clicked => { Overlay.ask("Uruchomić makro " + m + "?", "gcode", m); }
+            clicked => { Overlay.ask(@tr("Run macro {}?", m), "gcode", m); }
         }
     }
 }

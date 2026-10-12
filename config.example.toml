@@ -1,10 +1,13 @@
-# Skopiuj do ~/.config/klipper-helm/config.toml (albo wskaż przez KLIPPER_HELM_CONFIG).
-# Ten sam plik zapisuje panel (System → Ustawienia panelu).
-# Adres z pliku ma pierwszeństwo; MOONRAKER_URL działa tylko, gdy go tu nie ma.
+# Copy to ~/.config/klipper-helm/config.toml (or point to it with KLIPPER_HELM_CONFIG).
+# The panel writes the same file (System → Panel settings).
+# The address in this file wins; MOONRAKER_URL is only used when it is missing here.
 
 moonraker_url = "ws://127.0.0.1:7125/websocket"
 
-# Prędkości ruchu ręcznego [mm/s]
+# UI language: "auto" (system locale), "en" or "pl"
+language = "auto"
+
+# Manual movement speeds [mm/s]
 xy_speed = 100
 z_speed = 10
 

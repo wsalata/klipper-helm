@@ -1,0 +1,338 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: pl\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
+
+msgid "Home"
+msgstr "Pulpit"
+
+msgid "Temp."
+msgstr "Temp."
+
+msgid "Move"
+msgstr "Ruch"
+
+msgid "Filament"
+msgstr "Filament"
+
+msgid "Files"
+msgstr "Pliki"
+
+msgid "Macros"
+msgstr "Makra"
+
+msgid "Console"
+msgstr "Konsola"
+
+msgid "System"
+msgstr "System"
+
+msgid "Off"
+msgstr "Wył."
+
+msgid "Cancel"
+msgstr "Anuluj"
+
+msgid "Set"
+msgstr "Ustaw"
+
+msgid "Delete"
+msgstr "Usuń"
+
+msgid "space"
+msgstr "spacja"
+
+msgid "No"
+msgstr "Nie"
+
+msgid "Yes"
+msgstr "Tak"
+
+msgid "Estimated time"
+msgstr "Szacowany czas"
+
+msgid "Layer height"
+msgstr "Wysokość warstwy"
+
+msgid "Slicer"
+msgstr "Slicer"
+
+msgid "Close"
+msgstr "Zamknij"
+
+msgid "Print"
+msgstr "Drukuj"
+
+msgid "Restart"
+msgstr "Restart"
+
+msgid "Firmware restart"
+msgstr "Restart firmware"
+
+msgid "Type a G-code command..."
+msgstr "Wpisz komendę G-code..."
+
+msgid "Send"
+msgstr "Wyślij"
+
+msgid "Choose a file to print"
+msgstr "Wybierz plik do druku"
+
+msgid "Elapsed"
+msgstr "Czas"
+
+msgid "Remaining"
+msgstr "Pozostało"
+
+msgid "Layer"
+msgstr "Warstwa"
+
+msgid "Pause"
+msgstr "Pauza"
+
+msgid "Resume"
+msgstr "Wznów"
+
+msgid "Cancel print"
+msgstr "Anuluj druk"
+
+msgid "Cancel the current print?"
+msgstr "Anulować bieżący wydruk?"
+
+msgid "Print again"
+msgstr "Drukuj ponownie"
+
+msgid "Choose another file"
+msgstr "Wybierz inny plik"
+
+msgid "Speed"
+msgstr "Prędkość"
+
+msgid "Flow"
+msgstr "Przepływ"
+
+msgid "Nozzle {}°"
+msgstr "Dysza {}°"
+
+msgid "Too cold to extrude (min. 170°)"
+msgstr "Za zimno na ekstruzję (min. 170°)"
+
+msgid "Length [mm]"
+msgstr "Długość [mm]"
+
+msgid "Speed [mm/s]"
+msgstr "Prędkość [mm/s]"
+
+msgid "Retract"
+msgstr "Wycofaj"
+
+msgid "Extrude"
+msgstr "Ekstruduj"
+
+msgid "Fans"
+msgstr "Wentylatory"
+
+msgid "G-code files ({})"
+msgstr "Pliki G-code ({})"
+
+msgid "Refresh"
+msgstr "Odśwież"
+
+msgid "No files"
+msgstr "Brak plików"
+
+msgid "No macros (gcode_macro without a _ prefix)"
+msgstr "Brak makr (gcode_macro bez prefiksu _)"
+
+msgid "Run macro {}?"
+msgstr "Uruchomić makro {}?"
+
+msgid "{}  (not homed)"
+msgstr "{}  (nie zbazowano)"
+
+msgid "Step [mm]"
+msgstr "Krok [mm]"
+
+msgid "Homing"
+msgstr "Bazowanie"
+
+msgid "All"
+msgstr "Wszystkie"
+
+msgid "Motors off"
+msgstr "Wyłącz silniki"
+
+msgid "Preset name"
+msgstr "Nazwa presetu"
+
+msgid "{} - nozzle"
+msgstr "{} - dysza"
+
+msgid "{} - bed"
+msgstr "{} - stół"
+
+msgid "Panel settings"
+msgstr "Ustawienia panelu"
+
+msgid "Save"
+msgstr "Zapisz"
+
+msgid "Connection"
+msgstr "Połączenie"
+
+msgid "Moonraker address (ws://host:7125/websocket)"
+msgstr "Adres Moonrakera (ws://host:7125/websocket)"
+
+msgid "Manual movement"
+msgstr "Ruch ręczny"
+
+msgid "XY speed"
+msgstr "Prędkość XY"
+
+msgid "XY speed [mm/s]"
+msgstr "Prędkość XY [mm/s]"
+
+msgid "Z speed"
+msgstr "Prędkość Z"
+
+msgid "Z speed [mm/s]"
+msgstr "Prędkość Z [mm/s]"
+
+msgid "Language"
+msgstr "Język"
+
+msgid "File: {}"
+msgstr "Plik: {}"
+
+msgid "Presets (name, nozzle, bed)"
+msgstr "Presety (nazwa, dysza, stół)"
+
+msgid "+ Add"
+msgstr "+ Dodaj"
+
+msgid "New"
+msgstr "Nowy"
+
+msgid "Information"
+msgstr "Informacje"
+
+msgid "Host"
+msgstr "Host"
+
+msgid "State"
+msgstr "Stan"
+
+msgid "Restart Klipper?"
+msgstr "Zrestartować Klippera?"
+
+msgid "Restart the firmware (MCU)?"
+msgstr "Zrestartować firmware (MCU)?"
+
+msgid "Computer"
+msgstr "Komputer"
+
+msgid "Reboot"
+msgstr "Uruchom ponownie"
+
+msgid "Reboot the printer computer?"
+msgstr "Uruchomić ponownie komputer drukarki?"
+
+msgid "Shut down"
+msgstr "Wyłącz"
+
+msgid "Shut down the printer computer?"
+msgstr "Wyłączyć komputer drukarki?"
+
+msgid "off"
+msgstr "wył."
+
+msgid "Presets"
+msgstr "Presety"
+
+msgid "Heaters off"
+msgstr "Wyłącz grzanie"
+
+msgid "Connecting..."
+msgstr "Łączenie..."
+
+msgid "No connection"
+msgstr "Brak połączenia"
+
+msgid "Klipper is starting"
+msgstr "Klipper się uruchamia"
+
+msgid "Klipper shut down"
+msgstr "Klipper wyłączony"
+
+msgid "Klipper error"
+msgstr "Błąd Klippera"
+
+msgid "Connecting to Klipper..."
+msgstr "Łączenie z Klipperem..."
+
+msgid "Klipper unavailable"
+msgstr "Klipper niedostępny"
+
+msgid "Busy"
+msgstr "Zajęta"
+
+msgid "Printing"
+msgstr "Drukuje"
+
+msgid "Paused"
+msgstr "Pauza"
+
+msgid "Complete"
+msgstr "Zakończono"
+
+msgid "Cancelled"
+msgstr "Anulowano"
+
+msgid "Print error"
+msgstr "Błąd druku"
+
+msgid "Ready"
+msgstr "Gotowa"
+
+msgid "Cannot connect to Moonraker ({})"
+msgstr "Nie można połączyć z Moonrakerem ({})"
+
+msgid "Nozzle {}"
+msgstr "Dysza {}"
+
+msgid "Nozzle"
+msgstr "Dysza"
+
+msgid "Bed"
+msgstr "Stół"
+
+msgid "Part cooling"
+msgstr "Chłodzenie wydruku"
+
+msgid "Moonraker address must start with ws:// or wss:// and contain no spaces"
+msgstr "Adres Moonrakera musi zaczynać się od ws:// lub wss:// i nie może zawierać spacji"
+
+msgid "{} speed must be between 0.1 and 1000 mm/s"
+msgstr "Prędkość {} musi być w zakresie 0,1-1000 mm/s"
+
+msgid "Every preset needs a name"
+msgstr "Każdy preset musi mieć nazwę"
+
+msgid "Preset {}: temperature out of range"
+msgstr "Preset {}: temperatura poza zakresem"
+
+msgid "Could not save settings: {}"
+msgstr "Nie udało się zapisać ustawień: {}"
+
+msgid "No connection to Moonraker"
+msgstr "Brak połączenia z Moonrakerem"
+
+msgid "Settings saved"
+msgstr "Zapisano ustawienia"
+
+msgid "{} - target temperature"
+msgstr "{} - temperatura docelowa"
+
+msgid "target {}°"
+msgstr "cel {}°"
