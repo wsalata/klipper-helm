@@ -1,0 +1,151 @@
+import { Theme } from "../theme.slint";
+import { Overlay, Nav, Settings, Preset } from "../state.slint";
+import { Btn, BtnKind, Card, Caption } from "../widgets.slint";
+import { ScrollView } from "std-widgets.slint";
+
+// Wiersz "etykieta  wartość" do dotknięcia i edycji.
+component SettingRow inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+    callback clicked();
+    height: 52px;
+    border-radius: 8px;
+    background: ta.pressed ? Theme.border : Theme.surface-2;
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 12px;
+        Caption { text: root.label; horizontal-stretch: 0; }
+        Text {
+            text: root.value;
+            color: Theme.text;
+            horizontal-alignment: right;
+            vertical-alignment: center;
+            overflow: elide;
+            horizontal-stretch: 1;
+        }
+    }
+    ta := TouchArea { clicked => { root.clicked(); } }
+}
+
+component PresetRow inherits HorizontalLayout {
+    in property <Preset> preset;
+    in property <int> index;
+    spacing: 6px;
+    height: 48px;
+    Btn {
+        text: root.preset.name;
+        font-size: Theme.font-s;
+        horizontal-stretch: 2;
+        clicked => { Overlay.ask-text("name:" + root.index, "Nazwa presetu", root.preset.name); }
+    }
+    Btn {
+        text: round(root.preset.extruder) + "°";
+        font-size: Theme.font-s;
+        horizontal-stretch: 1;
+        clicked => { Overlay.ask-number("ext:" + root.index, root.preset.name + " - dysza", root.preset.extruder, "°"); }
+    }
+    Btn {
+        text: round(root.preset.bed) + "°";
+        font-size: Theme.font-s;
+        horizontal-stretch: 1;
+        clicked => { Overlay.ask-number("bed:" + root.index, root.preset.name + " - stół", root.preset.bed, "°"); }
+    }
+    Btn {
+        text: "X";
+        kind: BtnKind.ghost;
+        font-size: Theme.font-s;
+        width: 48px;
+        clicked => { Settings.preset-remove(root.index); }
+    }
+}
+
+export component SettingsPage inherits Rectangle {
+    VerticalLayout {
+        padding: Theme.gap;
+        spacing: Theme.gap;
+
+        HorizontalLayout {
+            spacing: Theme.gap;
+            Text {
+                text: "Ustawienia panelu";
+                color: Theme.text;
+                font-size: Theme.font-l;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+            Btn { text: "Anuluj"; kind: BtnKind.ghost; width: 120px; clicked => { Nav.page = 7; } }
+            Btn { text: "Zapisz"; kind: BtnKind.accent; width: 120px; clicked => { Settings.save(); } }
+        }
+
+        if Settings.error != "": Text {
+            text: Settings.error;
+            color: Theme.danger;
+            font-size: Theme.font-s;
+            wrap: word-wrap;
+        }
+
+        HorizontalLayout {
+            spacing: Theme.gap;
+            vertical-stretch: 1;
+
+            Card {
+                horizontal-stretch: 1;
+                VerticalLayout {
+                    padding: 12px;
+                    spacing: 8px;
+                    Caption { text: "Połączenie"; }
+                    SettingRow {
+                        label: "Moonraker";
+                        value: Settings.url;
+                        clicked => { Overlay.ask-text("url", "Adres Moonrakera (ws://host:7125/websocket)", Settings.url); }
+                    }
+                    Caption { text: "Ruch ręczny"; }
+                    SettingRow {
+                        label: "Prędkość XY";
+                        value: round(Settings.xy-speed) + " mm/s";
+                        clicked => { Overlay.ask-number("xy", "Prędkość XY [mm/s]", Settings.xy-speed, " mm/s"); }
+                    }
+                    SettingRow {
+                        label: "Prędkość Z";
+                        value: round(Settings.z-speed) + " mm/s";
+                        clicked => { Overlay.ask-number("z", "Prędkość Z [mm/s]", Settings.z-speed, " mm/s"); }
+                    }
+                    Rectangle { vertical-stretch: 1; }
+                    Caption {
+                        text: "Plik: " + Settings.config-path;
+                        wrap: word-wrap;
+                        font-size: 12px;
+                    }
+                }
+            }
+
+            Card {
+                horizontal-stretch: 1;
+                VerticalLayout {
+                    padding: 12px;
+                    spacing: 8px;
+                    HorizontalLayout {
+                        spacing: 6px;
+                        Caption { text: "Presety (nazwa, dysza, stół)"; horizontal-stretch: 1; }
+                        Btn {
+                            text: "+ Dodaj";
+                            font-size: Theme.font-s;
+                            min-height: 40px;
+                            width: 100px;
+                            clicked => { Settings.preset-add(); }
+                        }
+                    }
+                    ScrollView {
+                        vertical-stretch: 1;
+                        VerticalLayout {
+                            alignment: start;
+                            spacing: 6px;
+                            for p[i] in Settings.presets: PresetRow { preset: p; index: i; }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

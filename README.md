@@ -12,7 +12,7 @@ Na Raspberry Pi rysuje bezpośrednio przez KMS/DRM (bez X11/Wayland), na PC dzia
 - **Pliki**: lista G-code z miniaturkami, metadanymi i startem wydruku
 - **Makra**: wszystkie `gcode_macro` (bez prefiksu `_`), z potwierdzeniem
 - **Konsola**: historia G-code i klawiatura ekranowa (działa też fizyczna)
-- **System**: restart Klippera/firmware, reboot/wyłączenie komputera
+- **System**: restart Klippera/firmware, reboot/wyłączenie komputera, ustawienia panelu
 
 Przycisk **STOP** (awaryjne zatrzymanie) jest zawsze widoczny na górnym pasku.
 
@@ -23,7 +23,8 @@ cargo run --example mock_moonraker          # udawany Moonraker na 127.0.0.1:712
 cargo run                                   # panel w oknie
 ```
 
-Z prawdziwą drukarką: `MOONRAKER_URL=ws://<ip-drukarki>:7125/websocket cargo run`.
+Z prawdziwą drukarką: `cargo run` i adres ustawiony w System → Ustawienia panelu
+(albo `MOONRAKER_URL=ws://<ip-drukarki>:7125/websocket cargo run`, jeśli w pliku konfiguracji nie ma adresu).
 
 Zrzuty wszystkich ekranów (tylko build debug): `KLIPPER_HELM_SNAPSHOT=<katalog> cargo run` zapisuje `page-N.ppm` i kończy pracę.
 
@@ -50,4 +51,9 @@ Trzeba je włączyć w slicerze w formacie PNG, np. w PrusaSlicer/OrcaSlicer: Pr
 
 ## Konfiguracja
 
-Patrz [config.example.toml](config.example.toml).
+Ustawienia (adres Moonrakera, prędkości ruchu ręcznego, presety temperatur) zmienia się na ekranie
+**System → Ustawienia panelu**. Zapis od razu je stosuje: zmiana adresu przełącza panel na inną drukarkę
+bez restartu. Ekran działa też bez połączenia, więc można poprawić zły adres.
+
+Ustawienia trafiają do `~/.config/klipper-helm/config.toml` (albo do pliku z `KLIPPER_HELM_CONFIG`),
+wzór: [config.example.toml](config.example.toml). Adres z pliku ma pierwszeństwo przed `MOONRAKER_URL`.

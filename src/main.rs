@@ -2,10 +2,13 @@ mod bridge;
 mod config;
 mod moonraker;
 mod printer;
+mod settings;
 mod thumbs;
 
 use moonraker::Command;
 use slint::{ComponentHandle, Model, ModelRc, SharedString, Timer, TimerMode, VecModel};
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::time::Duration;
 use tokio::sync::mpsc::{self, UnboundedSender};
 
@@ -17,12 +20,7 @@ fn main() -> anyhow::Result<()> {
 
     let printer = ui.global::<Printer>();
     printer.set_moonraker_url(cfg.moonraker_url.as_str().into());
-    printer.set_presets(ModelRc::new(VecModel::from(
-        cfg.presets
-            .iter()
-            .map(|p| Preset { name: p.name.as_str().into(), extruder: p.extruder, bed: p.bed })
-            .collect::<Vec<_>>(),
-    )));
+    printer.set_presets(ModelRc::new(VecModel::from(settings::presets_model(&cfg.presets))));
     // Listy aktualizowane w miejscu przez bridge::sync
     printer.set_heaters(ModelRc::new(VecModel::<Heater>::default()));
     printer.set_sensors(ModelRc::new(VecModel::<Heater>::default()));
@@ -33,6 +31,7 @@ fn main() -> anyhow::Result<()> {
 
     let (tx, rx) = mpsc::unbounded_channel::<Command>();
     wire_actions(&ui, &tx);
+    settings::wire(&ui, Rc::new(RefCell::new(cfg.clone())), tx.clone());
 
     let clock = Timer::default();
     let weak = ui.as_weak();
@@ -104,32 +103,70 @@ fn wire_actions(ui: &AppWindow, tx: &UnboundedSender<Command>) {
         let Some(ui) = weak.upgrade() else { return };
         let printer = ui.global::<Printer>();
         let mut line = printer.get_console_input().to_string();
-        match key.as_str() {
-            "BS" => {
-                line.pop();
+        if key == "ENTER" {
+            let cmd = line.trim();
+            if !cmd.is_empty() {
+                let _ = tx.send(Command::Console(cmd.to_string()));
             }
-            "CLR" => line.clear(),
-            "ENTER" => {
-                let cmd = line.trim();
-                if !cmd.is_empty() {
-                    let _ = tx.send(Command::Console(cmd.to_string()));
-                }
-                line.clear();
-            }
-            // Ignorujemy klawisze sterujące z fizycznej klawiatury
-            k if k.chars().all(|c| !c.is_control()) => line.push_str(k),
-            _ => {}
+            line.clear();
+        } else {
+            edit_line(&mut line, &key);
         }
         printer.set_console_input(line.into());
     });
+
+    // Okno edycji tekstu (ustawienia)
+    let weak = ui.as_weak();
+    actions.on_text_key(move |key| {
+        let Some(ui) = weak.upgrade() else { return };
+        let overlay = ui.global::<Overlay>();
+        let mut line = overlay.get_text_value().to_string();
+        edit_line(&mut line, &key);
+        overlay.set_text_value(line.into());
+    });
 }
 
-/// Tylko w buildzie debug: przechodzi przez wszystkie ekrany, zapisuje każdy
-/// jako `page-N.ppm` w podanym katalogu i zamyka aplikację. Ostatni zrzut
-/// (`page-8.ppm`) pokazuje okno pierwszego pliku z listy.
+/// Wspólna obsługa klawiszy edycji: BS, CLR albo znaki do dopisania.
+fn edit_line(line: &mut String, key: &str) {
+    match key {
+        "BS" => {
+            line.pop();
+        }
+        "CLR" => line.clear(),
+        // Ignorujemy klawisze sterujące z fizycznej klawiatury
+        k if k.chars().all(|c| !c.is_control()) => line.push_str(k),
+        _ => {}
+    }
+}
+
+/// Tylko w buildzie debug: przechodzi przez kolejne widoki (ekrany, okna),
+/// zapisuje każdy jako `page-N.ppm` w podanym katalogu i zamyka aplikację.
 #[cfg(debug_assertions)]
 fn snapshot_pages(ui: &AppWindow, dir: String) -> Timer {
-    const PAGES: i32 = 8;
+    type Step = Box<dyn Fn(&AppWindow)>;
+    let page = |n: i32| -> Step { Box::new(move |ui| ui.global::<Nav>().set_page(n)) };
+    let mut steps: Vec<Step> = (0..8).map(page).collect();
+    steps.push(Box::new(|ui| {
+        if let Some(file) = ui.global::<Printer>().get_files().row_data(0) {
+            ui.global::<Nav>().set_page(4);
+            ui.global::<Overlay>().invoke_open_file(file.path.clone());
+            ui.global::<Actions>().invoke_file_details(file.path);
+        }
+    }));
+    steps.push(Box::new(|ui| {
+        ui.global::<Overlay>().set_file_open(false);
+        ui.global::<Settings>().invoke_load();
+        ui.global::<Nav>().set_page(8);
+    }));
+    steps.push(Box::new(|ui| {
+        let url = ui.global::<Settings>().get_url();
+        ui.global::<Overlay>().invoke_ask_text("url".into(), "Adres Moonrakera".into(), url);
+    }));
+    steps.push(Box::new(|ui| {
+        ui.global::<Overlay>().set_text_open(false);
+        ui.global::<Overlay>().invoke_ask_number("xy".into(), "Prędkość XY [mm/s]".into(), 100.0, " mm/s".into());
+    }));
+
     let weak = ui.as_weak();
     let mut step = 0;
     let timer = Timer::default();
@@ -137,31 +174,25 @@ fn snapshot_pages(ui: &AppWindow, dir: String) -> Timer {
         let Some(ui) = weak.upgrade() else { return };
         // Pierwszy krok czeka na dane z Moonrakera
         if step > 0 {
-            let page = step - 1;
+            let n = step - 1;
             match ui.window().take_snapshot() {
                 Ok(buf) => {
                     let mut ppm = format!("P6 {} {} 255\n", buf.width(), buf.height()).into_bytes();
                     ppm.extend(buf.as_slice().iter().flat_map(|p| [p.r, p.g, p.b]));
-                    let path = format!("{dir}/page-{page}.ppm");
+                    let path = format!("{dir}/page-{n}.ppm");
                     if let Err(e) = std::fs::write(&path, ppm) {
                         eprintln!("{path}: {e}");
                     }
                 }
                 Err(e) => eprintln!("Zrzut ekranu: {e}"),
             }
-            if page == PAGES {
+        }
+        match steps.get(step) {
+            Some(setup) => setup(&ui),
+            None => {
                 let _ = slint::quit_event_loop();
                 return;
             }
-        }
-        if step < PAGES {
-            ui.global::<Nav>().set_page(step);
-        } else if let Some(file) = ui.global::<Printer>().get_files().row_data(0) {
-            ui.global::<Nav>().set_page(4);
-            let overlay = ui.global::<Overlay>();
-            overlay.set_file_path(file.path.clone());
-            overlay.set_file_open(true);
-            ui.global::<Actions>().invoke_file_details(file.path);
         }
         step += 1;
     });

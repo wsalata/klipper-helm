@@ -1,5 +1,6 @@
 # Skopiuj do ~/.config/klipper-helm/config.toml (albo wskaż przez KLIPPER_HELM_CONFIG).
-# Zmienna MOONRAKER_URL ma pierwszeństwo przed moonraker_url.
+# Ten sam plik zapisuje panel (System → Ustawienia panelu).
+# Adres z pliku ma pierwszeństwo; MOONRAKER_URL działa tylko, gdy go tu nie ma.
 
 moonraker_url = "ws://127.0.0.1:7125/websocket"
 

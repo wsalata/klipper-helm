@@ -161,6 +161,26 @@ pub fn console(ui: &Weak<AppWindow>, lines: Vec<ConsoleLine>) {
     });
 }
 
+/// Czyści wszystko, co dotyczy poprzedniej drukarki (po zmianie adresu Moonrakera).
+pub fn reset(ui: &Weak<AppWindow>) {
+    with_printer(ui, |p| {
+        THUMBS.with_borrow_mut(|c| *c = ThumbCache::default());
+        sync(&p.get_heaters(), Vec::new());
+        sync(&p.get_sensors(), Vec::new());
+        sync(&p.get_fans(), Vec::new());
+        sync(&p.get_files(), Vec::new());
+        sync(&p.get_macros(), Vec::new());
+        sync(&p.get_console(), Vec::new());
+        p.set_job(Default::default());
+        p.set_position(Default::default());
+        p.set_details(Default::default());
+        p.set_job_thumb(Default::default());
+        p.set_details_thumb(Default::default());
+        p.set_hostname("Klipper".into());
+        p.set_klipper_version("".into());
+    });
+}
+
 pub fn console_line(text: &str) -> ConsoleLine {
     let kind = if text.starts_with("!!") {
         2
@@ -174,5 +194,8 @@ pub fn console_line(text: &str) -> ConsoleLine {
 
 pub fn toast(ui: &Weak<AppWindow>, text: impl Into<SharedString>) {
     let text = text.into();
-    with_printer(ui, move |p| p.set_toast(text));
+    with_printer(ui, move |p| {
+        p.set_toast_error(true);
+        p.set_toast(text);
+    });
 }

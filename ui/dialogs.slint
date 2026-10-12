@@ -1,5 +1,5 @@
 import { Theme } from "theme.slint";
-import { Printer, Actions, Overlay, Nav, Conn } from "state.slint";
+import { Printer, Actions, Overlay, Nav, Conn, Settings } from "state.slint";
 import { Btn, BtnKind, Card, Caption, InfoRow, Thumb } from "widgets.slint";
 
 // Przyciemnione tło blokujące dotyk pod oknem.
@@ -29,7 +29,11 @@ export component NumpadDialog inherits Scrim {
     }
     function submit(value: string) {
         if (value.is-float()) {
-            Actions.set-temp(Overlay.numpad-id, value.to-float());
+            if (Overlay.numpad-purpose == "temp") {
+                Actions.set-temp(Overlay.numpad-id, value.to-float());
+            } else {
+                Settings.edit-number(Overlay.numpad-id, value.to-float());
+            }
         }
         Overlay.numpad-open = false;
     }
@@ -49,7 +53,7 @@ export component NumpadDialog inherits Scrim {
                     padding-left: 12px;
                     padding-right: 12px;
                     Text {
-                        text: (Overlay.numpad-value == "" ? Overlay.numpad-hint : Overlay.numpad-value) + "°";
+                        text: (Overlay.numpad-value == "" ? Overlay.numpad-hint : Overlay.numpad-value) + Overlay.numpad-unit;
                         color: Overlay.numpad-value == "" ? Theme.text-dim : Theme.text;
                         font-size: Theme.font-xl;
                         horizontal-alignment: right;
@@ -64,12 +68,114 @@ export component NumpadDialog inherits Scrim {
                 spacing: 6px;
                 Btn { text: "C"; clicked => { Overlay.numpad-value = ""; } }
                 Btn { text: "0"; clicked => { root.press("0"); } }
-                Btn { text: "Wył."; font-size: Theme.font-s; clicked => { root.submit("0"); } }
+                if Overlay.numpad-purpose == "temp": Btn { text: "Wył."; font-size: Theme.font-s; clicked => { root.submit("0"); } }
+                if Overlay.numpad-purpose != "temp": Btn { text: "."; clicked => { root.press("."); } }
             }
             HorizontalLayout {
                 spacing: 6px;
                 Btn { text: "Anuluj"; kind: BtnKind.ghost; clicked => { Overlay.numpad-open = false; } }
                 Btn { text: "Ustaw"; kind: BtnKind.accent; clicked => { root.submit(Overlay.numpad-value); } }
+            }
+        }
+    }
+}
+
+component TextKey inherits Btn {
+    in property <string> key;
+    in property <bool> upper;
+    text: root.upper ? root.key.to-uppercase() : root.key;
+    font-size: Theme.font-s;
+    min-height: 40px;
+    min-width: 30px;
+    horizontal-stretch: 1;
+    clicked => { Actions.text-key(self.text); }
+}
+
+// Edycja tekstu (adres, nazwy) z pełną klawiaturą ekranową.
+export component TextDialog inherits Scrim {
+    dismiss => { Overlay.text-open = false; }
+    property <bool> upper;
+
+    function submit() {
+        Settings.edit-text(Overlay.text-id, Overlay.text-value);
+        Overlay.text-open = false;
+    }
+
+    init => { fs.focus(); }
+
+    Dialog {
+        width: min(root.width - 16px, 760px);
+        height: min(root.height - 16px, 420px);
+
+        fs := FocusScope {
+            // Fizyczna klawiatura (np. na PC)
+            key-pressed(e) => {
+                if (e.text == Key.Return) {
+                    root.submit();
+                } else if (e.text == Key.Escape) {
+                    Overlay.text-open = false;
+                } else if (e.text == Key.Backspace) {
+                    Actions.text-key("BS");
+                } else {
+                    Actions.text-key(e.text);
+                }
+                accept
+            }
+
+            VerticalLayout {
+                padding: 12px;
+                spacing: 5px;
+                Caption { text: Overlay.text-title; }
+                Rectangle {
+                    height: 46px;
+                    background: Theme.bg;
+                    border-radius: 8px;
+                    border-width: 1px;
+                    border-color: Theme.accent;
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        Text {
+                            text: Overlay.text-value + "|";
+                            color: Theme.text;
+                            font-family: Theme.mono;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 4px;
+                    for k in ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]: TextKey { key: k; }
+                    Btn { text: "Usuń"; font-size: Theme.font-s; min-height: 40px; horizontal-stretch: 1.5; clicked => { Actions.text-key("BS"); } }
+                }
+                HorizontalLayout {
+                    spacing: 4px;
+                    for k in ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "-"]: TextKey { key: k; upper: root.upper; }
+                }
+                HorizontalLayout {
+                    spacing: 4px;
+                    for k in ["a", "s", "d", "f", "g", "h", "j", "k", "l", ":", "_"]: TextKey { key: k; upper: root.upper; }
+                }
+                HorizontalLayout {
+                    spacing: 4px;
+                    Btn {
+                        text: root.upper ? "abc" : "ABC";
+                        font-size: Theme.font-s;
+                        min-height: 40px;
+                        horizontal-stretch: 1.5;
+                        active: root.upper;
+                        clicked => { root.upper = !root.upper; }
+                    }
+                    for k in ["z", "x", "c", "v", "b", "n", "m", ".", "/"]: TextKey { key: k; upper: root.upper; }
+                }
+                HorizontalLayout {
+                    spacing: 4px;
+                    Btn { text: "C"; font-size: Theme.font-s; min-height: 40px; clicked => { Actions.text-key("CLR"); } }
+                    Btn { text: "spacja"; font-size: Theme.font-s; min-height: 40px; horizontal-stretch: 4; clicked => { Actions.text-key(" "); } }
+                    Btn { text: "Anuluj"; kind: BtnKind.ghost; min-height: 40px; horizontal-stretch: 2; clicked => { Overlay.text-open = false; } }
+                    Btn { text: "OK"; kind: BtnKind.accent; min-height: 40px; horizontal-stretch: 2; clicked => { root.submit(); } }
+                }
             }
         }
     }

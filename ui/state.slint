@@ -96,6 +96,7 @@ export global Printer {
     in property <[Preset]> presets;
 
     in-out property <string> toast;
+    in-out property <bool> toast-error: true;
 
     out property <bool> printing: job.state == "printing" || job.state == "paused";
 }
@@ -103,6 +104,8 @@ export global Printer {
 export global Actions {
     callback gcode(string);
     callback console-key(string);
+    // Klawisz w oknie edycji tekstu (Overlay.text-value)
+    callback text-key(string);
     callback set-temp(string, float);
     callback set-fan(string, float);
     callback jog(string, float);
@@ -120,6 +123,25 @@ export global Actions {
     callback host-shutdown();
 }
 
+// Szkic ustawień panelu edytowany na ekranie Ustawienia; zapis stosuje je od razu.
+export global Settings {
+    in-out property <string> url;
+    in-out property <float> xy-speed;
+    in-out property <float> z-speed;
+    in property <[Preset]> presets;
+    in property <string> config-path;
+    in-out property <string> error;
+
+    // Wypełnia szkic bieżącą konfiguracją
+    callback load();
+    callback save();
+    callback preset-add();
+    callback preset-remove(int);
+    // Wyniki okien edycji; id: "xy", "z", "ext:N", "bed:N", "url", "name:N"
+    callback edit-number(string, float);
+    callback edit-text(string, string);
+}
+
 export global Nav {
     in-out property <int> page: 0;
 }
@@ -127,6 +149,9 @@ export global Nav {
 // Stan okien nakładanych na ekran (klawiatura numeryczna, potwierdzenia, plik).
 export global Overlay {
     in-out property <bool> numpad-open;
+    // "temp" ustawia temperaturę grzałki, "settings" zwraca wynik do Settings
+    in-out property <string> numpad-purpose;
+    in-out property <string> numpad-unit;
     in-out property <string> numpad-title;
     in-out property <string> numpad-id;
     in-out property <string> numpad-hint;
@@ -136,6 +161,11 @@ export global Overlay {
     in-out property <string> confirm-text;
     in-out property <string> confirm-action;
     in-out property <string> confirm-arg;
+
+    in-out property <bool> text-open;
+    in-out property <string> text-title;
+    in-out property <string> text-id;
+    in-out property <string> text-value;
 
     in-out property <bool> file-open;
     in-out property <string> file-path;
@@ -149,10 +179,29 @@ export global Overlay {
 
     public function edit-temp(heater: Heater) {
         numpad-title = heater.name + " - temperatura docelowa";
+        numpad-purpose = "temp";
+        numpad-unit = "°";
         numpad-id = heater.id;
         numpad-hint = round(heater.target) + "";
         numpad-value = "";
         numpad-open = true;
+    }
+
+    public function ask-number(id: string, title: string, current: float, unit: string) {
+        numpad-title = title;
+        numpad-purpose = "settings";
+        numpad-unit = unit;
+        numpad-id = id;
+        numpad-hint = round(current) + "";
+        numpad-value = "";
+        numpad-open = true;
+    }
+
+    public function ask-text(id: string, title: string, current: string) {
+        text-title = title;
+        text-id = id;
+        text-value = current;
+        text-open = true;
     }
 
     public function open-file(path: string) {

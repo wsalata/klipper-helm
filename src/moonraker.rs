@@ -15,6 +15,8 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async, tungstenite::Message};
 
 const RETRY: Duration = Duration::from_secs(2);
+/// Zły adres nie może blokować zmiany ustawień na długie minuty
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 /// Moonraker wysyła notify_proc_stat_update co sekundę, więc cisza oznacza zerwane połączenie.
 const SILENCE_TIMEOUT: Duration = Duration::from_secs(15);
 /// Dla tylu najnowszych plików pobieramy miniaturki na listę
@@ -39,6 +41,8 @@ pub enum Command {
     StartPrint(String),
     HostReboot,
     HostShutdown,
+    /// Nowe ustawienia z panelu; zmiana adresu oznacza ponowne połączenie
+    Reconfigure(Config),
 }
 
 /// Na co czeka dane zapytanie, żeby wiedzieć, jak obsłużyć odpowiedź.
@@ -60,48 +64,68 @@ enum Pending {
 enum Exit {
     Quit,
     Lost,
+    Reconnect(Config),
 }
 
 type Ws = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
-pub async fn run(cfg: Config, ui: Weak<AppWindow>, mut rx: UnboundedReceiver<Command>) {
+pub async fn run(mut cfg: Config, ui: Weak<AppWindow>, mut rx: UnboundedReceiver<Command>) {
     let mut thumbs = Thumbs::new(&cfg.moonraker_url);
     loop {
         bridge::conn(&ui, Conn::Connecting, "Łączenie...", cfg.moonraker_url.clone());
-        match connect_async(cfg.moonraker_url.as_str()).await {
-            Ok((ws, _)) => {
-                let mut session = Session::new(ws, &cfg, ui.clone(), &mut thumbs);
+        let mut next = None;
+        match tokio::time::timeout(CONNECT_TIMEOUT, connect_async(cfg.moonraker_url.as_str())).await {
+            Ok(Ok((ws, _))) => {
+                let mut session = Session::new(ws, cfg.clone(), ui.clone(), &mut thumbs);
                 match session.run(&mut rx).await {
                     Ok(Exit::Quit) => return,
                     Ok(Exit::Lost) => eprintln!("Moonraker: połączenie zamknięte"),
+                    Ok(Exit::Reconnect(new)) => next = Some(new),
                     Err(e) => eprintln!("Moonraker: {e}"),
                 }
             }
-            Err(e) => eprintln!("Moonraker {}: {e}", cfg.moonraker_url),
+            Ok(Err(e)) => eprintln!("Moonraker {}: {e}", cfg.moonraker_url),
+            Err(_) => eprintln!("Moonraker {}: przekroczony czas łączenia", cfg.moonraker_url),
         }
-        bridge::conn(
-            &ui,
-            Conn::Disconnected,
-            "Brak połączenia",
-            format!("Nie można połączyć z Moonrakerem ({})", cfg.moonraker_url),
-        );
 
-        let deadline = tokio::time::Instant::now() + RETRY;
-        loop {
-            tokio::select! {
-                _ = tokio::time::sleep_until(deadline) => break,
-                cmd = rx.recv() => match cmd {
-                    None => return,
-                    Some(_) => bridge::toast(&ui, "Brak połączenia z Moonrakerem"),
-                },
+        if next.is_none() {
+            bridge::conn(
+                &ui,
+                Conn::Disconnected,
+                "Brak połączenia",
+                format!("Nie można połączyć z Moonrakerem ({})", cfg.moonraker_url),
+            );
+            let deadline = tokio::time::Instant::now() + RETRY;
+            loop {
+                tokio::select! {
+                    _ = tokio::time::sleep_until(deadline) => break,
+                    cmd = rx.recv() => match cmd {
+                        None => return,
+                        // Poprawiony adres: łączymy od razu
+                        Some(Command::Reconfigure(new)) => {
+                            next = Some(new);
+                            break;
+                        }
+                        Some(_) => bridge::toast(&ui, "Brak połączenia z Moonrakerem"),
+                    },
+                }
             }
+        }
+
+        if let Some(new) = next {
+            if new.moonraker_url != cfg.moonraker_url {
+                // Inna drukarka: nic z poprzedniej nie może zostać na ekranie
+                thumbs = Thumbs::new(&new.moonraker_url);
+                bridge::reset(&ui);
+            }
+            cfg = new;
         }
     }
 }
 
 struct Session<'a> {
     ws: Ws,
-    cfg: &'a Config,
+    cfg: Config,
     thumbs: &'a mut Thumbs,
     ui: Weak<AppWindow>,
     next_id: u64,
@@ -113,7 +137,7 @@ struct Session<'a> {
 }
 
 impl<'a> Session<'a> {
-    fn new(ws: Ws, cfg: &'a Config, ui: Weak<AppWindow>, thumbs: &'a mut Thumbs) -> Self {
+    fn new(ws: Ws, cfg: Config, ui: Weak<AppWindow>, thumbs: &'a mut Thumbs) -> Self {
         Self {
             ws,
             cfg,
@@ -172,6 +196,11 @@ impl<'a> Session<'a> {
                 }
                 cmd = rx.recv() => {
                     let Some(cmd) = cmd else { return Ok(Exit::Quit) };
+                    if let Command::Reconfigure(new) = &cmd
+                        && new.moonraker_url != self.cfg.moonraker_url
+                    {
+                        return Ok(Exit::Reconnect(new.clone()));
+                    }
                     self.on_command(cmd).await?;
                 }
                 _ = tick.tick() => {
@@ -383,6 +412,10 @@ impl<'a> Session<'a> {
             Command::StartPrint(file) => ("printer.print.start".into(), json!({ "filename": file })),
             Command::RefreshFiles => {
                 return self.call("server.files.list", json!({ "root": "gcodes" }), Pending::FileList).await;
+            }
+            Command::Reconfigure(cfg) => {
+                self.cfg = cfg;
+                return Ok(());
             }
             Command::FileDetails(file) => {
                 let params = json!({ "filename": file });

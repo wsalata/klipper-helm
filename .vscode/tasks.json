@@ -25,17 +25,22 @@
             "detail": "Uruchamia mock i panel podłączony do niego",
             "type": "shell",
             "command": "cargo run",
-            "options": { "env": { "MOONRAKER_URL": "ws://127.0.0.1:7125/websocket" } },
+            // Osobny plik ustawień, żeby nie mieszać mocka z prawdziwą drukarką
+            "options": {
+                "env": {
+                    "MOONRAKER_URL": "ws://127.0.0.1:7125/websocket",
+                    "KLIPPER_HELM_CONFIG": "${workspaceFolder}/target/dev-mock.toml"
+                }
+            },
             "dependsOn": "Mock Moonraker",
             "problemMatcher": ["$rustc"],
             "presentation": { "panel": "dedicated" }
         },
         {
             "label": "Panel (drukarka)",
-            "detail": "Panel podłączony do prawdziwego Moonrakera",
+            "detail": "Normalne ustawienia (~/.config/klipper-helm); adres zmienisz w System → Ustawienia panelu",
             "type": "shell",
             "command": "cargo run",
-            "options": { "env": { "MOONRAKER_URL": "${input:moonrakerUrl}" } },
             "problemMatcher": ["$rustc"],
             "presentation": { "panel": "dedicated" }
         },
@@ -52,14 +57,6 @@
             "command": "cargo build --release",
             "problemMatcher": ["$rustc"],
             "group": "build"
-        }
-    ],
-    "inputs": [
-        {
-            "id": "moonrakerUrl",
-            "type": "promptString",
-            "description": "Adres WebSocket Moonrakera",
-            "default": "ws://192.168.1.100:7125/websocket"
         }
     ]
 }
