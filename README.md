@@ -34,6 +34,11 @@ In VS Code, the tasks in `.vscode/` start the mock and the panel together (Ctrl+
 
 Snapshots of all views (debug builds only): `KLIPPER_HELM_SNAPSHOT=<dir> cargo run` saves `page-N.ppm` files and quits.
 
+## Embedded image
+
+`make image` builds a small read-only Linux image for the Odroid XU4 that boots straight into the panel
+(Buildroot). See [buildroot/README.md](buildroot/README.md).
+
 ## Installing on a Raspberry Pi
 
 ```sh

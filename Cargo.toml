@@ -5,9 +5,14 @@ edition = "2024"
 description = "Touch screen panel for Klipper (a KlipperScreen replacement) in Rust + Slint"
 
 [dependencies]
-# The default features (winit) run the panel in a window on a PC;
-# linuxkms draws directly on the Raspberry Pi screen without X11/Wayland.
-slint = { version = "1.18", features = ["backend-linuxkms-noseat"] }
+# Always: DRM/KMS output with libinput and the software renderer (no GPU needed).
+# The `desktop` feature adds a window (winit) and GPU rendering for working on a PC.
+slint = { version = "1.18", default-features = false, features = [
+    "std",
+    "compat-1-18",
+    "backend-linuxkms-noseat",
+    "renderer-software",
+] }
 tokio = { version = "1", features = ["rt", "macros", "sync", "time", "net"] }
 tokio-tungstenite = "0.30"
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
@@ -19,6 +24,14 @@ anyhow = "1"
 # Thumbnails: HTTP without TLS (Moonraker on the local network) and PNG decoding
 ureq = { version = "3", default-features = false }
 png = "0.18"
+
+[features]
+default = ["desktop"]
+# Panel in a window on a PC (X11/Wayland) with GPU rendering and accessibility
+desktop = ["slint/backend-default", "slint/renderer-femtovg", "slint/accessibility"]
+# Embedded image (buildroot/): KMS + software renderer only, build with
+# `--no-default-features --features embedded`
+embedded = []
 
 [build-dependencies]
 slint-build = "1.18"

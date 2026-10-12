@@ -1,0 +1,2 @@
+source "$BR2_EXTERNAL_KLIPPER_HELM_PATH/package/klipper-helm/Config.in"
+source "$BR2_EXTERNAL_KLIPPER_HELM_PATH/package/odroidxu4-blobs/Config.in"

@@ -1,0 +1,18 @@
+#!/bin/sh
+# Starts the panel; init runs this from /etc/inittab and starts it again
+# whenever it exits (crash, or the panel being killed).
+
+export SLINT_BACKEND=linuxkms-software
+export KLIPPER_HELM_CONFIG=/data/klipper-helm/config.toml
+# Only picks the UI language when the settings say "System"
+export LANG=pl_PL.UTF-8
+
+# Per-device overrides, e.g. SLINT_KMS_ROTATION=180 or SLINT_SCALE_FACTOR=1.25
+[ -r /data/klipper-helm/env ] && . /data/klipper-helm/env
+
+mkdir -p /data/klipper-helm 2>/dev/null
+/usr/bin/klipper-helm >>/tmp/klipper-helm.log 2>&1
+echo "klipper-helm exited with status $?" >>/tmp/klipper-helm.log
+
+# Avoid a tight restart loop when something is badly wrong (no display, ...)
+sleep 2

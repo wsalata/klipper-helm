@@ -1,0 +1,16 @@
+config BR2_PACKAGE_KLIPPER_HELM
+	bool "klipper-helm"
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
+	depends on BR2_PACKAGE_HAS_UDEV # libinput
+	select BR2_PACKAGE_HOST_RUSTC
+	select BR2_PACKAGE_LIBINPUT
+	select BR2_PACKAGE_LIBXKBCOMMON
+	select BR2_PACKAGE_FONTCONFIG
+	help
+	  Touch screen panel for Klipper/Moonraker, drawing directly
+	  on the display through DRM/KMS with Slint's software renderer.
+	  Started and restarted by init, see the board overlay.
+
+comment "klipper-helm needs udev /dev management"
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
+	depends on !BR2_PACKAGE_HAS_UDEV
