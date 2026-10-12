@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 const DEFAULT_URL: &str = "ws://127.0.0.1:7125/websocket";
 /// UI languages selectable in the settings ("auto" follows the system locale)
-pub const LANGUAGES: &[&str] = &["auto", "en", "pl"];
+pub const LANGUAGES: [&str; 3] = ["auto", "en", "pl"];
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(default)]
