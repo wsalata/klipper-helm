@@ -61,6 +61,8 @@ pub fn snapshot(ui: &Weak<AppWindow>, s: Snapshot) {
         p.set_position(s.position);
         p.set_extruder_temp(s.extruder_temp);
         p.set_has_extruder(s.has_extruder);
+        p.set_has_part_fan(s.part_fan.is_some());
+        p.set_part_fan(s.part_fan.unwrap_or(0.0));
         sync(&p.get_heaters(), s.heaters);
         sync(&p.get_sensors(), s.sensors);
         sync(&p.get_fans(), s.fans);

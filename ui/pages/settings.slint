@@ -67,13 +67,8 @@ export component SettingsPage inherits Rectangle {
 
         HorizontalLayout {
             spacing: Theme.gap;
-            Text {
-                text: @tr("Panel settings");
-                color: Theme.text;
-                font-size: Theme.font-l;
-                vertical-alignment: center;
-                horizontal-stretch: 1;
-            }
+            // The title is in the header
+            alignment: end;
             Btn { text: @tr("Cancel"); kind: BtnKind.ghost; width: 120px; clicked => { Nav.page = 7; } }
             Btn { text: @tr("Save"); kind: BtnKind.accent; width: 120px; clicked => { Settings.save(); } }
         }

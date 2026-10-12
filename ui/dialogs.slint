@@ -1,17 +1,17 @@
 import { Theme } from "theme.slint";
 import { Printer, Actions, Overlay, Nav, Conn, Settings, Strings, Keys } from "state.slint";
-import { Btn, BtnKind, Card, Caption, InfoRow, Thumb, CursorText } from "widgets.slint";
+import { Btn, BtnKind, Card, Caption, InfoRow, Thumb, CursorText, Stepper } from "widgets.slint";
 
 // Dimmed backdrop that blocks touches to the screen below.
 component Scrim inherits Rectangle {
     callback dismiss();
-    background: #000000b0;
+    background: #050a14c0;
     TouchArea { clicked => { root.dismiss(); } }
 }
 
 component Dialog inherits Rectangle {
     background: Theme.surface;
-    border-radius: 14px;
+    border-radius: Theme.radius-l;
     border-width: 1px;
     border-color: Theme.border;
     TouchArea {}  // swallows clicks so they do not close the dialog
@@ -306,6 +306,171 @@ export component NotReadyPanel inherits Rectangle {
             spacing: Theme.gap;
             Btn { text: @tr("Restart"); width: 200px; clicked => { Actions.restart(); } }
             Btn { text: @tr("Firmware restart"); kind: BtnKind.accent; width: 220px; clicked => { Actions.firmware-restart(); } }
+        }
+    }
+}
+
+component SheetTitle inherits HorizontalLayout {
+    in property <string> text;
+    callback close();
+    spacing: 10px;
+    Text {
+        text: root.text;
+        color: Theme.text;
+        font-size: Theme.font-l;
+        font-weight: 600;
+        vertical-alignment: center;
+        horizontal-stretch: 1;
+    }
+    Btn {
+        text: @tr("Close");
+        kind: BtnKind.ghost;
+        width: 130px;
+        clicked => { root.close(); }
+    }
+}
+
+component MenuTile inherits Rectangle {
+    in property <image> icon;
+    in property <string> text;
+    in property <bool> active;
+    callback clicked();
+
+    // Equal widths in a row, whatever the label length
+    preferred-width: 100px;
+    horizontal-stretch: 1;
+    border-radius: Theme.radius-l;
+    background: ta.pressed ? Theme.border : root.active ? Theme.surface-2 : Theme.bg;
+    border-width: root.active ? 2px : 0px;
+    border-color: Theme.accent;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-action-default => { root.clicked(); }
+
+    VerticalLayout {
+        alignment: center;
+        spacing: 8px;
+        HorizontalLayout {
+            alignment: center;
+            Image {
+                source: root.icon;
+                colorize: root.active ? Theme.accent : Theme.text;
+                width: 34px;
+                height: 34px;
+            }
+        }
+        Text {
+            text: root.text;
+            color: Theme.text;
+            horizontal-alignment: center;
+            overflow: elide;
+        }
+    }
+    ta := TouchArea { clicked => { root.clicked(); } }
+}
+
+// All screens as big tiles; replaces the side navigation of earlier versions.
+export component MenuSheet inherits Scrim {
+    dismiss => { Overlay.menu-open = false; }
+
+    property <[{ icon: image, text: string, page: int }]> row1: [
+        { icon: @image-url("icons/home.svg"), text: @tr("Home"), page: 0 },
+        { icon: @image-url("icons/thermo.svg"), text: @tr("Temperature"), page: 1 },
+        { icon: @image-url("icons/move.svg"), text: @tr("Move"), page: 2 },
+        { icon: @image-url("icons/extrude.svg"), text: @tr("Filament"), page: 3 },
+    ];
+    property <[{ icon: image, text: string, page: int }]> row2: [
+        { icon: @image-url("icons/files.svg"), text: @tr("Files"), page: 4 },
+        { icon: @image-url("icons/macro.svg"), text: @tr("Macros"), page: 5 },
+        { icon: @image-url("icons/console.svg"), text: @tr("Console"), page: 6 },
+        { icon: @image-url("icons/system.svg"), text: @tr("System"), page: 7 },
+    ];
+
+    function go(page: int) {
+        Nav.page = page;
+        Overlay.menu-open = false;
+    }
+
+    Dialog {
+        width: root.width - 32px;
+        height: root.height - 32px;
+        VerticalLayout {
+            padding: 16px;
+            spacing: 12px;
+            SheetTitle {
+                text: @tr("Menu");
+                close => { Overlay.menu-open = false; }
+            }
+            HorizontalLayout {
+                spacing: 12px;
+                vertical-stretch: 1;
+                for item in root.row1: MenuTile {
+                    icon: item.icon;
+                    text: item.text;
+                    active: Nav.page == item.page;
+                    clicked => { root.go(item.page); }
+                }
+            }
+            HorizontalLayout {
+                spacing: 12px;
+                vertical-stretch: 1;
+                for item in root.row2: MenuTile {
+                    icon: item.icon;
+                    text: item.text;
+                    // Settings (8) is a sub-page of System
+                    active: Nav.page == item.page || (item.page == 7 && Nav.page == 8);
+                    clicked => { root.go(item.page); }
+                }
+            }
+        }
+    }
+}
+
+// Adjustments during a print, as a sheet from the bottom.
+export component TuneSheet inherits Scrim {
+    dismiss => { Overlay.tune-open = false; }
+
+    Dialog {
+        width: min(root.width - 32px, 660px);
+        height: 300px;
+        y: root.height - self.height - 16px;
+        VerticalLayout {
+            padding: 16px;
+            spacing: 12px;
+            SheetTitle {
+                text: @tr("Tune");
+                close => { Overlay.tune-open = false; }
+            }
+            HorizontalLayout {
+                spacing: 12px;
+                Stepper {
+                    label: @tr("Speed");
+                    value: Printer.job.speed-factor + "%";
+                    minus => { Actions.gcode("M220 S" + max(10, Printer.job.speed-factor - 10)); }
+                    plus => { Actions.gcode("M220 S" + (Printer.job.speed-factor + 10)); }
+                }
+                Stepper {
+                    label: @tr("Flow");
+                    value: Printer.job.flow-factor + "%";
+                    minus => { Actions.gcode("M221 S" + max(50, Printer.job.flow-factor - 1)); }
+                    plus => { Actions.gcode("M221 S" + (Printer.job.flow-factor + 1)); }
+                }
+            }
+            HorizontalLayout {
+                spacing: 12px;
+                Stepper {
+                    label: @tr("Z offset");
+                    value: Printer.job.z-offset;
+                    minus => { Actions.gcode("SET_GCODE_OFFSET Z_ADJUST=-0.01 MOVE=1"); }
+                    plus => { Actions.gcode("SET_GCODE_OFFSET Z_ADJUST=0.01 MOVE=1"); }
+                }
+                if Printer.has-part-fan: Stepper {
+                    label: @tr("Part cooling");
+                    value: round(Printer.part-fan * 100) + "%";
+                    minus => { Actions.set-fan("fan", max(0, Printer.part-fan - 0.1)); }
+                    plus => { Actions.set-fan("fan", min(1, Printer.part-fan + 0.1)); }
+                }
+            }
         }
     }
 }

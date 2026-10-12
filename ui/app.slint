@@ -1,7 +1,14 @@
+// Bundled fonts (SIL Open Font License, see ui/fonts/OFL.txt)
+import "fonts/Saira-Regular.ttf";
+import "fonts/Saira-Medium.ttf";
+import "fonts/Saira-SemiBold.ttf";
+import "fonts/SairaSemiCondensed-SemiBold.ttf";
+import "fonts/SairaSemiCondensed-Bold.ttf";
+
 import { Theme } from "theme.slint";
 import { Printer, Actions, Overlay, Nav, Conn, Settings, Strings, Messages } from "state.slint";
-import { Btn, BtnKind, NavItem } from "widgets.slint";
-import { NumpadDialog, ConfirmDialog, FileDialog, TextDialog, NotReadyPanel } from "dialogs.slint";
+import { Btn, BtnKind } from "widgets.slint";
+import { NumpadDialog, ConfirmDialog, FileDialog, TextDialog, NotReadyPanel, MenuSheet, TuneSheet } from "dialogs.slint";
 import { DashboardPage } from "pages/dashboard.slint";
 import { TemperaturePage } from "pages/temperature.slint";
 import { MovePage } from "pages/move.slint";
@@ -14,67 +21,98 @@ import { SettingsPage } from "pages/settings.slint";
 
 export { Printer, Actions, Overlay, Nav, Settings, Messages }
 
-component TopBar inherits Rectangle {
-    height: 46px;
-    background: Theme.surface;
+component Header inherits HorizontalLayout {
+    pure function page-title(page: int) -> string {
+        if (page == 1) { return @tr("Temperature"); }
+        if (page == 2) { return @tr("Move"); }
+        if (page == 3) { return @tr("Filament"); }
+        if (page == 4) { return @tr("Files"); }
+        if (page == 5) { return @tr("Macros"); }
+        if (page == 6) { return @tr("Console"); }
+        if (page == 7) { return @tr("System"); }
+        if (page == 8) { return @tr("Panel settings"); }
+        return "";
+    }
 
-    HorizontalLayout {
-        padding-left: 12px;
-        padding-right: 6px;
-        padding-top: 5px;
-        padding-bottom: 5px;
-        spacing: 12px;
+    height: 64px;
+    padding-left: 20px;
+    padding-right: 16px;
+    spacing: 10px;
 
-        Text {
-            text: Printer.hostname;
-            color: Theme.text;
-            font-weight: 700;
-            vertical-alignment: center;
-            horizontal-stretch: 0;
-        }
-        Rectangle {
-            horizontal-stretch: 0;
-            border-radius: self.height / 2;
-            background: Printer.conn != Conn.ready ? Theme.danger
-                : Printer.job.state == "printing" ? Theme.accent
-                : Printer.job.state == "paused" ? Theme.warn
-                : Printer.job.state == "error" ? Theme.danger
-                : Theme.ok;
-            HorizontalLayout {
-                padding-left: 12px;
-                padding-right: 12px;
-                Text {
-                    text: Strings.status(Printer.status);
-                    color: #ffffff;
-                    font-size: Theme.font-s;
-                    vertical-alignment: center;
-                }
-            }
-        }
-        Rectangle { horizontal-stretch: 1; }
-        for h in Printer.top-heaters: Text {
-            text: Strings.heater-name(h) + " " + round(h.temp) + "/" + round(h.target) + "°";
-            color: Theme.text-dim;
-            font-size: Theme.font-s;
-            vertical-alignment: center;
-            horizontal-stretch: 0;
-        }
-        Text {
-            text: Printer.clock;
-            color: Theme.text;
-            vertical-alignment: center;
-            horizontal-stretch: 0;
-        }
-        // Emergency stop: acts immediately, like Klipper's own (heaters and motors off, firmware restart needed)
+    // Off the dashboard: the way back and the menu
+    if Nav.page != 0: VerticalLayout {
+        alignment: center;
         Btn {
-            // Three clockwise arrows, as on the "twist to release" emergency stop button
-            icon: @image-url("icons/estop.svg");
-            icon-size: 28px;
-            kind: BtnKind.danger;
-            min-height: 36px;
-            width: 86px;
-            accessible-label: @tr("Emergency stop");
-            clicked => { Actions.emergency-stop(); }
+            icon: @image-url("icons/home.svg");
+            kind: BtnKind.ghost;
+            width: 48px;
+            accessible-label: @tr("Home");
+            clicked => { Nav.page = 0; }
+        }
+    }
+    if Nav.page != 0: VerticalLayout {
+        alignment: center;
+        Btn {
+            icon: @image-url("icons/menu.svg");
+            kind: BtnKind.ghost;
+            width: 48px;
+            accessible-label: @tr("Menu");
+            clicked => { Overlay.menu-open = true; }
+        }
+    }
+    if Nav.page != 0: Text {
+        text: root.page-title(Nav.page);
+        color: Theme.text;
+        font-size: Theme.font-l;
+        font-weight: 600;
+        vertical-alignment: center;
+        horizontal-stretch: 0;
+    }
+
+    Text {
+        text: Printer.hostname + " · ";
+        color: Theme.text-dim;
+        font-size: 15px;
+        vertical-alignment: center;
+        horizontal-stretch: 0;
+    }
+    Text {
+        text: Strings.status(Printer.status);
+        color: Printer.conn != Conn.ready ? Theme.danger-text
+            : Printer.job.state == "paused" ? Theme.warn
+            : Theme.accent;
+        font-size: 15px;
+        vertical-alignment: center;
+        overflow: elide;
+        horizontal-stretch: 1;
+    }
+    Text {
+        text: Printer.clock;
+        color: Theme.text-dim;
+        font-size: 15px;
+        vertical-alignment: center;
+        horizontal-stretch: 0;
+    }
+
+    // Emergency stop: acts immediately, like Klipper's own (heaters and motors off,
+    // firmware restart needed). Three clockwise arrows as on a "twist to release" button.
+    VerticalLayout {
+        alignment: center;
+        Rectangle {
+            width: 52px;
+            height: 52px;
+            border-radius: 26px;
+            border-width: 2px;
+            border-color: Theme.danger;
+            Btn {
+                width: 42px;
+                height: 42px;
+                icon: @image-url("icons/estop.svg");
+                icon-size: 26px;
+                kind: BtnKind.danger;
+                accessible-label: @tr("Emergency stop");
+                clicked => { Actions.emergency-stop(); }
+            }
         }
     }
 }
@@ -84,52 +122,36 @@ export component AppWindow inherits Window {
     preferred-width: 800px;
     preferred-height: 480px;
     background: Theme.bg;
+    default-font-family: Theme.font;
     default-font-size: Theme.font-m;
 
-    property <[{ icon: image, text: string }]> nav-items: [
-        { icon: @image-url("icons/home.svg"), text: @tr("Home") },
-        { icon: @image-url("icons/thermo.svg"), text: @tr("Temp.") },
-        { icon: @image-url("icons/move.svg"), text: @tr("Move") },
-        { icon: @image-url("icons/extrude.svg"), text: @tr("Filament") },
-        { icon: @image-url("icons/files.svg"), text: @tr("Files") },
-        { icon: @image-url("icons/macro.svg"), text: @tr("Macros") },
-        { icon: @image-url("icons/console.svg"), text: @tr("Console") },
-        { icon: @image-url("icons/system.svg"), text: @tr("System") },
-    ];
     // Console, System and Settings also work when Klipper is not ready
     property <bool> blocked: Printer.conn != Conn.ready && Nav.page < 6;
 
     VerticalLayout {
-        TopBar {}
+        Header {}
+        // Pages add their own 10 px, so content lines up with the 20 px header
         HorizontalLayout {
-            Rectangle {
-                width: 84px;
-                background: Theme.surface;
-                VerticalLayout {
-                    for item[i] in root.nav-items: NavItem {
-                        icon: item.icon;
-                        text: item.text;
-                        // Settings (8) is a sub-page of System
-                        active: Nav.page == i || (i == 7 && Nav.page == 8);
-                        clicked => { Nav.page = i; }
-                    }
-                }
-            }
-            Rectangle {
-                if root.blocked: NotReadyPanel { width: 100%; height: 100%; }
-                if !root.blocked && Nav.page == 0: DashboardPage { width: 100%; height: 100%; }
-                if !root.blocked && Nav.page == 1: TemperaturePage { width: 100%; height: 100%; }
-                if !root.blocked && Nav.page == 2: MovePage { width: 100%; height: 100%; }
-                if !root.blocked && Nav.page == 3: ExtrudePage { width: 100%; height: 100%; }
-                if !root.blocked && Nav.page == 4: FilesPage { width: 100%; height: 100%; }
-                if !root.blocked && Nav.page == 5: MacrosPage { width: 100%; height: 100%; }
-                if Nav.page == 6: ConsolePage { width: 100%; height: 100%; }
-                if Nav.page == 7: SystemPage { width: 100%; height: 100%; }
-                if Nav.page == 8: SettingsPage { width: 100%; height: 100%; }
-            }
+          padding-left: 10px;
+          padding-right: 10px;
+          vertical-stretch: 1;
+          Rectangle {
+            if root.blocked: NotReadyPanel { width: 100%; height: 100%; }
+            if !root.blocked && Nav.page == 0: DashboardPage { width: 100%; height: 100%; }
+            if !root.blocked && Nav.page == 1: TemperaturePage { width: 100%; height: 100%; }
+            if !root.blocked && Nav.page == 2: MovePage { width: 100%; height: 100%; }
+            if !root.blocked && Nav.page == 3: ExtrudePage { width: 100%; height: 100%; }
+            if !root.blocked && Nav.page == 4: FilesPage { width: 100%; height: 100%; }
+            if !root.blocked && Nav.page == 5: MacrosPage { width: 100%; height: 100%; }
+            if Nav.page == 6: ConsolePage { width: 100%; height: 100%; }
+            if Nav.page == 7: SystemPage { width: 100%; height: 100%; }
+            if Nav.page == 8: SettingsPage { width: 100%; height: 100%; }
+          }
         }
     }
 
+    if Overlay.menu-open: MenuSheet { width: 100%; height: 100%; }
+    if Overlay.tune-open: TuneSheet { width: 100%; height: 100%; }
     if Overlay.numpad-open: NumpadDialog { width: 100%; height: 100%; }
     if Overlay.confirm-open: ConfirmDialog { width: 100%; height: 100%; }
     if Overlay.file-open: FileDialog { width: 100%; height: 100%; }
@@ -139,13 +161,13 @@ export component AppWindow inherits Window {
         y: parent.height - self.height - 16px;
         width: min(parent.width - 32px, 560px);
         height: 52px;
-        border-radius: Theme.radius;
-        background: #2d3340;
+        border-radius: 26px;
+        background: Theme.surface-2;
         border-width: 1px;
         border-color: Printer.toast-error ? Theme.danger : Theme.accent;
         HorizontalLayout {
-            padding-left: 14px;
-            padding-right: 14px;
+            padding-left: 20px;
+            padding-right: 20px;
             Text {
                 text: Printer.toast;
                 color: Theme.text;

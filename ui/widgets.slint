@@ -1,7 +1,8 @@
 import { Theme } from "theme.slint";
 import { Heater, Strings } from "state.slint";
 
-export enum BtnKind { normal, accent, danger, ghost }
+// danger-outline: a destructive action that is not an emergency (e.g. cancelling a print)
+export enum BtnKind { normal, accent, danger, danger-outline, ghost }
 
 export component Btn inherits Rectangle {
     in property <string> text;
@@ -16,29 +17,34 @@ export component Btn inherits Rectangle {
     property <color> base: root.active ? Theme.accent
         : root.kind == BtnKind.accent ? Theme.accent
         : root.kind == BtnKind.danger ? Theme.danger
-        : root.kind == BtnKind.ghost ? transparent
+        : root.kind == BtnKind.ghost || root.kind == BtnKind.danger-outline ? transparent
         : Theme.surface-2;
     property <color> fg: !root.enabled ? Theme.text-dim
-        : (root.active || root.kind == BtnKind.accent || root.kind == BtnKind.danger) ? #ffffff
+        : (root.active || root.kind == BtnKind.accent) ? Theme.on-accent
+        : root.kind == BtnKind.danger ? #ffffff
+        : root.kind == BtnKind.danger-outline ? Theme.danger-text
         : Theme.text;
 
     min-height: 48px;
     min-width: 48px;
-    border-radius: Theme.radius;
+    // Pills, but keys taller than ~52 px stay rounded rectangles
+    border-radius: min(self.height / 2, 26px);
     accessible-role: button;
     accessible-label: root.text;
     accessible-enabled: root.enabled;
     accessible-action-default => { root.clicked(); }
-    border-width: root.kind == BtnKind.ghost ? 1px : 0px;
-    border-color: Theme.border;
-    background: !root.enabled ? Theme.surface : ta.pressed ? root.base.darker(0.35) : root.base;
+    border-width: root.kind == BtnKind.ghost || root.kind == BtnKind.danger-outline ? 1px : 0px;
+    border-color: root.kind == BtnKind.danger-outline ? Theme.danger-border : Theme.border;
+    background: !root.enabled ? Theme.surface
+        : ta.pressed ? (root.base == transparent ? Theme.surface-2 : root.base.darker(0.35))
+        : root.base;
     animate background { duration: 80ms; }
 
     HorizontalLayout {
         alignment: center;
         spacing: 8px;
-        padding-left: 8px;
-        padding-right: 8px;
+        padding-left: root.text != "" ? 14px : 8px;
+        padding-right: root.text != "" ? 14px : 8px;
         if root.icon.width > 0: VerticalLayout {
             alignment: center;
             Image {
@@ -67,8 +73,8 @@ export component Btn inherits Rectangle {
 // Print thumbnail; slicers render them on a transparent background.
 export component Thumb inherits Rectangle {
     in property <image> source;
-    background: Theme.surface-2;
-    border-radius: 8px;
+    background: Theme.surface;
+    border-radius: 12px;
     clip: true;
     Image {
         source: root.source;
@@ -80,7 +86,7 @@ export component Thumb inherits Rectangle {
 
 export component Card inherits Rectangle {
     background: Theme.surface;
-    border-radius: Theme.radius;
+    border-radius: Theme.radius-l;
 }
 
 export component Caption inherits Text {
@@ -115,82 +121,6 @@ export component Bar inherits Rectangle {
         border-radius: parent.border-radius;
         background: root.fill;
     }
-}
-
-export component HeaterTile inherits Rectangle {
-    in property <Heater> heater;
-    callback clicked();
-
-    background: ta.pressed ? Theme.surface-2 : Theme.surface;
-    border-radius: Theme.radius;
-    border-width: root.heater.target > 0 ? 2px : 0px;
-    border-color: Theme.hot;
-
-    VerticalLayout {
-        padding: 10px;
-        spacing: 2px;
-        Text {
-            text: Strings.heater-name(root.heater);
-            color: Theme.text-dim;
-            font-size: Theme.font-s;
-            overflow: elide;
-        }
-        Text {
-            text: round(root.heater.temp) + "°";
-            color: Theme.text;
-            font-size: Theme.font-xl;
-            font-weight: 700;
-        }
-        Text {
-            text: root.heater.target > 0 ? @tr("target {}°", round(root.heater.target)) : @tr("off");
-            color: root.heater.target > 0 ? Theme.hot : Theme.text-dim;
-            font-size: Theme.font-s;
-        }
-        Bar { value: root.heater.power; fill: Theme.hot; }
-    }
-
-    ta := TouchArea {
-        enabled: root.heater.settable;
-        clicked => { root.clicked(); }
-    }
-}
-
-export component NavItem inherits Rectangle {
-    in property <image> icon;
-    in property <string> text;
-    in property <bool> active;
-    callback clicked();
-
-    background: root.active ? Theme.surface-2 : ta.pressed ? Theme.surface : transparent;
-
-    Rectangle {
-        x: 0;
-        width: 3px;
-        height: parent.height;
-        background: root.active ? Theme.accent : transparent;
-    }
-
-    VerticalLayout {
-        alignment: center;
-        spacing: 2px;
-        HorizontalLayout {
-            alignment: center;
-            Image {
-                source: root.icon;
-                colorize: root.active ? Theme.accent : Theme.text-dim;
-                width: 24px;
-                height: 24px;
-            }
-        }
-        Text {
-            text: root.text;
-            font-size: 11px;
-            color: root.active ? Theme.text : Theme.text-dim;
-            horizontal-alignment: center;
-        }
-    }
-
-    ta := TouchArea { clicked => { root.clicked(); } }
 }
 
 // Single-line text with a cursor between the parts before and after it.
@@ -234,5 +164,50 @@ export component InfoRow inherits HorizontalLayout {
         horizontal-alignment: right;
         horizontal-stretch: 1;
         overflow: elide;
+    }
+}
+
+// Step adjustment with - and + (speed, flow, Z offset, fan).
+export component Stepper inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+    callback minus();
+    callback plus();
+    background: Theme.surface-2;
+    border-radius: Theme.radius-l;
+    height: 80px;
+    // Equal widths side by side
+    preferred-width: 200px;
+    horizontal-stretch: 1;
+    HorizontalLayout {
+        padding: 12px;
+        spacing: 10px;
+        Btn {
+            text: "-";
+            width: 56px;
+            font-size: Theme.font-l;
+            accessible-label: @tr("Decrease {}", root.label);
+            clicked => { root.minus(); }
+        }
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+            Caption { text: root.label; horizontal-alignment: center; overflow: elide; }
+            Text {
+                text: root.value;
+                color: Theme.text;
+                font-family: Theme.display;
+                font-size: Theme.font-l;
+                font-weight: 600;
+                horizontal-alignment: center;
+            }
+        }
+        Btn {
+            text: "+";
+            width: 56px;
+            font-size: Theme.font-l;
+            accessible-label: @tr("Increase {}", root.label);
+            clicked => { root.plus(); }
+        }
     }
 }

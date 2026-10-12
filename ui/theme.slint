@@ -1,21 +1,31 @@
+// Concept C "at a glance": deep navy ground, teal accent, Saira type.
 export global Theme {
-    out property <color> bg: #14161b;
-    out property <color> surface: #1e222a;
-    out property <color> surface-2: #2a303b;
-    out property <color> border: #353c49;
-    out property <color> text: #e8eaed;
-    out property <color> text-dim: #9aa1ad;
-    out property <color> accent: #4f9cf7;
-    out property <color> ok: #3fb950;
-    out property <color> warn: #e3a52f;
-    out property <color> danger: #e5534b;
-    out property <color> hot: #f0883e;
+    out property <color> bg: #0B1220;
+    out property <color> surface: #121B2E;
+    out property <color> surface-2: #1C2840;
+    out property <color> border: #33435E;
+    out property <color> text: #E8EEF6;
+    out property <color> text-dim: #9FB0C6;
+    out property <color> accent: #2EC4B6;
+    // Text on an accent background (white on teal is too faint)
+    out property <color> on-accent: #06231F;
+    out property <color> ok: #2EC4B6;
+    out property <color> warn: #FFB020;
+    out property <color> danger: #E03131;
+    out property <color> danger-text: #FF8787;
+    out property <color> danger-border: #5C2A33;
+    out property <color> hot: #FF8A3D;
 
-    out property <length> radius: 10px;
-    out property <length> gap: 8px;
+    out property <length> radius: 14px;
+    out property <length> radius-l: 20px;
+    out property <length> gap: 10px;
     out property <length> font-s: 14px;
-    out property <length> font-m: 18px;
+    out property <length> font-m: 17px;
     out property <length> font-l: 24px;
     out property <length> font-xl: 34px;
+
+    // Bundled in ui/fonts (OFL) and registered in app.slint
+    out property <string> font: "Saira";
+    out property <string> display: "Saira SemiCondensed";
     out property <string> mono: "DejaVu Sans Mono";
 }

@@ -144,6 +144,8 @@ pub struct Snapshot {
     pub position: Position,
     pub extruder_temp: f32,
     pub has_extruder: bool,
+    /// Speed of the part cooling fan ("fan"), if the printer has one
+    pub part_fan: Option<f32>,
 }
 
 #[derive(Default)]
@@ -247,12 +249,19 @@ impl PrinterModel {
 
         let active = matches!(state, "printing" | "paused");
         let finished = matches!(state, "complete" | "cancelled" | "error");
+        let remaining = remaining.filter(|_| active);
+        let eta_clock = remaining
+            .and_then(|secs| chrono::Duration::try_seconds(secs as i64))
+            .map(|d| (chrono::Local::now() + d).format("%H:%M").to_string())
+            .unwrap_or_default();
         PrintJob {
             state: state.into(),
             filename: if active || finished { self.filename().into() } else { "".into() },
             progress: if state == "complete" { 1.0 } else { progress as f32 },
             elapsed: fmt_duration(duration).into(),
-            remaining: remaining.filter(|_| active).map_or_else(|| "-".into(), fmt_duration).into(),
+            remaining: remaining.map_or_else(|| "-".into(), fmt_duration).into(),
+            remaining_minutes: remaining.map_or(-1, |secs| (secs / 60.0).ceil() as i32),
+            eta_clock: eta_clock.into(),
             layer: layer.into(),
             filament: format!("{:.2} m", self.f("/print_stats/filament_used").unwrap_or(0.0) / 1000.0).into(),
             message: self.s("/print_stats/message").into(),
@@ -309,6 +318,12 @@ impl PrinterModel {
             .collect();
 
         let extruder = heaters.iter().find(|h| h.id == "extruder");
+        let part_fan = self
+            .objects
+            .fans
+            .iter()
+            .any(|f| f == "fan")
+            .then(|| self.f("/fan/speed").unwrap_or(0.0) as f32);
         Snapshot {
             conn: self.conn(),
             status: self.status(),
@@ -320,6 +335,7 @@ impl PrinterModel {
             top_heaters,
             extruder_temp: extruder.map_or(0.0, |h| h.temp),
             has_extruder: extruder.is_some(),
+            part_fan,
             heaters,
             sensors,
             fans,

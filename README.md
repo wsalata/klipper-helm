@@ -5,9 +5,11 @@ On a Raspberry Pi it draws directly through KMS/DRM (no X11/Wayland); on a PC it
 
 ## Screens
 
-- **Home**: heaters, print progress with thumbnail, elapsed/remaining time, layer, pause/resume/cancel,
-  speed, flow and Z offset adjustment during a print
-- **Temp.**: all heaters and sensors, setting targets with a numeric keypad, presets
+- **Home**: built to be read from across the room. The remaining time and end time dominate, next to the
+  print thumbnail and progress; nozzle, bed and fan chips open their controls. **Tune** adjusts speed, flow,
+  Z offset and the part fan during a print. When idle or finished it shows the state and print time.
+- **Menu** (a button on Home, and in the header elsewhere) opens every other screen as large tiles:
+- **Temperature**: all heaters and sensors, setting targets with a numeric keypad, presets
 - **Move**: jogging with a selectable step, homing, motors off
 - **Filament**: extrude and retract, fan control
 - **Files**: G-code list with thumbnails, metadata and print start
@@ -15,7 +17,8 @@ On a Raspberry Pi it draws directly through KMS/DRM (no X11/Wayland); on a PC it
 - **Console**: G-code history and an on-screen keyboard (a physical keyboard works too)
 - **System**: Klipper/firmware restart, host reboot/shutdown, panel settings
 
-The **STOP** button (emergency stop) is always visible in the top bar.
+The emergency stop is always in the top right corner: a red round button with three clockwise arrows,
+like the "twist to release" marking on a machine's emergency stop. It acts immediately, like Klipper's own.
 
 ## Running on a PC (no printer needed)
 
@@ -61,6 +64,12 @@ to another printer without a restart. The screen also works without a connection
 
 Settings are stored in `~/.config/klipper-helm/config.toml` (or the file given by `KLIPPER_HELM_CONFIG`),
 see [config.example.toml](config.example.toml). The address in the file takes precedence over `MOONRAKER_URL`.
+
+## Look and fonts
+
+The UI follows one style ("at a glance"): a deep navy ground, a teal accent and the Saira typeface.
+The fonts are compiled into the binary from `ui/fonts/` (SIL Open Font License, `ui/fonts/OFL.txt`),
+so the Pi needs no extra font packages; colors and sizes live in `ui/theme.slint`.
 
 ## Translations
 

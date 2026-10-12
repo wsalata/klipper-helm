@@ -4,11 +4,8 @@ msgstr ""
 "Language: pl\n"
 "Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
 
-msgid "Home"
-msgstr "Pulpit"
-
-msgid "Temp."
-msgstr "Temp."
+msgid "Temperature"
+msgstr "Temperatura"
 
 msgid "Move"
 msgstr "Ruch"
@@ -27,6 +24,18 @@ msgstr "Konsola"
 
 msgid "System"
 msgstr "System"
+
+msgid "Panel settings"
+msgstr "Ustawienia panelu"
+
+msgid "Home"
+msgstr "Pulpit"
+
+msgid "Menu"
+msgstr "Menu"
+
+msgid "Emergency stop"
+msgstr "Zatrzymanie awaryjne"
 
 msgid "Off"
 msgstr "Wył."
@@ -70,23 +79,47 @@ msgstr "Restart"
 msgid "Firmware restart"
 msgstr "Restart firmware"
 
+msgid "Tune"
+msgstr "Dostrój"
+
+msgid "Speed"
+msgstr "Prędkość"
+
+msgid "Flow"
+msgstr "Przepływ"
+
+msgid "Z offset"
+msgstr "Z-offset"
+
+msgid "Part cooling"
+msgstr "Chłodzenie wydruku"
+
 msgid "Type a G-code command..."
 msgstr "Wpisz komendę G-code..."
 
 msgid "Send"
 msgstr "Wyślij"
 
-msgid "Choose a file to print"
-msgstr "Wybierz plik do druku"
-
-msgid "Elapsed"
-msgstr "Czas"
+msgid "Paused, remaining"
+msgstr "Pauza, pozostało"
 
 msgid "Remaining"
 msgstr "Pozostało"
 
-msgid "Layer"
-msgstr "Warstwa"
+msgid "finishes around {}"
+msgstr "koniec około {}"
+
+msgid "{}% · layer {} · Z {}"
+msgstr "{}% · warstwa {} · Z {}"
+
+msgid "print time · filament {}"
+msgstr "czas druku · filament {}"
+
+msgid "State"
+msgstr "Stan"
+
+msgid "Fan {}%"
+msgstr "Wentylator {}%"
 
 msgid "Pause"
 msgstr "Pauza"
@@ -94,23 +127,11 @@ msgstr "Pauza"
 msgid "Resume"
 msgstr "Wznów"
 
-msgid "Cancel print"
-msgstr "Anuluj druk"
-
 msgid "Cancel the current print?"
 msgstr "Anulować bieżący wydruk?"
 
 msgid "Print again"
 msgstr "Drukuj ponownie"
-
-msgid "Choose another file"
-msgstr "Wybierz inny plik"
-
-msgid "Speed"
-msgstr "Prędkość"
-
-msgid "Flow"
-msgstr "Przepływ"
 
 msgid "Nozzle {}°"
 msgstr "Dysza {}°"
@@ -172,9 +193,6 @@ msgstr "{} - dysza"
 msgid "{} - bed"
 msgstr "{} - stół"
 
-msgid "Panel settings"
-msgstr "Ustawienia panelu"
-
 msgid "Save"
 msgstr "Zapisz"
 
@@ -219,9 +237,6 @@ msgstr "Informacje"
 
 msgid "Host"
 msgstr "Host"
-
-msgid "State"
-msgstr "Stan"
 
 msgid "Restart Klipper?"
 msgstr "Zrestartować Klippera?"
@@ -307,9 +322,6 @@ msgstr "Dysza"
 msgid "Bed"
 msgstr "Stół"
 
-msgid "Part cooling"
-msgstr "Chłodzenie wydruku"
-
 msgid "Moonraker address must start with ws:// or wss:// and contain no spaces"
 msgstr "Adres Moonrakera musi zaczynać się od ws:// lub wss:// i nie może zawierać spacji"
 
@@ -334,8 +346,8 @@ msgstr "Zapisano ustawienia"
 msgid "{} - target temperature"
 msgstr "{} - temperatura docelowa"
 
-msgid "target {}°"
-msgstr "cel {}°"
+msgid "Decrease {}"
+msgstr "Zmniejsz: {}"
 
-msgid "Emergency stop"
-msgstr "Zatrzymanie awaryjne"
+msgid "Increase {}"
+msgstr "Zwiększ: {}"

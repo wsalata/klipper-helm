@@ -1,186 +1,223 @@
 import { Theme } from "../theme.slint";
-import { Printer, Actions, Overlay, Nav, Strings } from "../state.slint";
-import { Btn, BtnKind, Card, Caption, Bar, HeaterTile, InfoRow, Thumb } from "../widgets.slint";
+import { Printer, Actions, Overlay, Nav, Strings, Status } from "../state.slint";
+import { Btn, BtnKind, Caption, Bar, Thumb } from "../widgets.slint";
 
-// Step adjustment during a print (speed, flow, Z offset).
-component Stepper inherits Card {
-    in property <string> label;
-    in property <string> value;
-    callback minus();
-    callback plus();
-    HorizontalLayout {
-        padding: 6px;
-        spacing: 6px;
-        Btn { text: "-"; width: 52px; font-size: Theme.font-l; clicked => { root.minus(); } }
-        VerticalLayout {
-            alignment: center;
-            Caption { text: root.label; horizontal-alignment: center; }
-            Text {
-                text: root.value;
-                color: Theme.text;
-                font-size: Theme.font-m;
-                font-weight: 700;
-                horizontal-alignment: center;
-            }
-        }
-        Btn { text: "+"; width: 52px; font-size: Theme.font-l; clicked => { root.plus(); } }
-    }
-}
-
+// Concept C: one glance from across the room. The remaining time dominates;
+// everything else is one tap away (chips, Tune, Menu).
 export component DashboardPage inherits Rectangle {
+    property <bool> active: Printer.printing;
+    property <bool> finished: !Printer.printing && Printer.job.filename != "";
+    property <int> minutes: Printer.job.remaining-minutes;
+
+    // 95 -> "1:35", 42 -> "42"
+    pure function big-time(m: int) -> string {
+        if (m >= 60) {
+            return floor(m / 60) + ":" + (mod(m, 60) < 10 ? "0" : "") + mod(m, 60);
+        }
+        return m + "";
+    }
+
     VerticalLayout {
-        padding: Theme.gap;
-        spacing: Theme.gap;
+        padding-left: 10px;
+        padding-right: 10px;
+        padding-bottom: 16px;
+        spacing: 14px;
 
         HorizontalLayout {
-            spacing: Theme.gap;
-            height: 112px;
-            for h in Printer.heaters: HeaterTile {
-                heater: h;
-                clicked => { Overlay.edit-temp(h); }
-            }
-        }
-
-        Card {
+            spacing: 28px;
             vertical-stretch: 1;
 
-            // Idle: prompt to pick a file
-            if !Printer.printing && Printer.job.filename == "": VerticalLayout {
-                alignment: center;
-                spacing: 12px;
-                Text {
-                    text: Strings.status(Printer.status);
-                    font-size: Theme.font-l;
-                    color: Theme.text;
-                    horizontal-alignment: center;
+            VerticalLayout {
+                width: 270px;
+                spacing: 10px;
+                if Printer.job-thumb.width > 0: Thumb {
+                    source: Printer.job-thumb;
+                    height: 230px;
+                    border-radius: Theme.radius-l;
                 }
-                HorizontalLayout {
-                    alignment: center;
-                    Btn {
-                        text: @tr("Choose a file to print");
-                        kind: BtnKind.accent;
-                        width: 280px;
-                        clicked => { Nav.page = 4; }
+                if Printer.job-thumb.width == 0: Rectangle {
+                    height: 230px;
+                    border-radius: Theme.radius-l;
+                    background: Theme.surface;
+                    Image {
+                        source: @image-url("../icons/files.svg");
+                        colorize: Theme.border;
+                        width: 64px;
+                        height: 64px;
                     }
                 }
+                Text {
+                    text: root.active || root.finished ? Printer.job.filename : Printer.hostname;
+                    color: Theme.text-dim;
+                    font-size: Theme.font-s;
+                    overflow: elide;
+                }
+                Rectangle { vertical-stretch: 1; }
             }
 
-            // A print is running or has just finished
-            if Printer.printing || Printer.job.filename != "": VerticalLayout {
-                padding: 12px;
-                spacing: 8px;
+            VerticalLayout {
+                spacing: 6px;
+                horizontal-stretch: 1;
 
+                // Printing or paused: remaining time, end time, progress
+                if root.active: VerticalLayout {
+                    spacing: 6px;
+                    Text {
+                        text: Printer.job.state == "paused" ? @tr("Paused, remaining") : @tr("Remaining");
+                        color: Printer.job.state == "paused" ? Theme.warn : Theme.text-dim;
+                        font-size: 15px;
+                    }
+                    HorizontalLayout {
+                        alignment: start;
+                        spacing: 10px;
+                        Text {
+                            text: root.minutes < 0 ? "-" : root.big-time(root.minutes);
+                            color: Theme.text;
+                            font-family: Theme.display;
+                            font-weight: 700;
+                            font-size: 96px;
+                            vertical-alignment: bottom;
+                        }
+                        Text {
+                            text: root.minutes >= 60 ? "h" : "min";
+                            color: Theme.text-dim;
+                            font-family: Theme.display;
+                            font-weight: 600;
+                            font-size: 44px;
+                            vertical-alignment: bottom;
+                        }
+                    }
+                    if Printer.job.eta-clock != "": Text {
+                        text: @tr("finishes around {}", Printer.job.eta-clock);
+                        color: Theme.text;
+                        font-size: Theme.font-m;
+                    }
+                    Rectangle { height: 6px; }
+                    Bar {
+                        height: 10px;
+                        value: Printer.job.progress;
+                        fill: Printer.job.state == "paused" ? Theme.warn : Theme.accent;
+                    }
+                    Text {
+                        text: @tr("{}% · layer {} · Z {}", round(Printer.job.progress * 100), Printer.job.layer, Printer.position.z);
+                        color: Theme.text-dim;
+                        font-size: Theme.font-s;
+                    }
+                }
+
+                // Finished, cancelled or failed: outcome and print time
+                if root.finished: VerticalLayout {
+                    spacing: 6px;
+                    Text {
+                        text: Strings.status(Printer.status);
+                        color: Printer.job.state == "complete" ? Theme.accent : Theme.danger-text;
+                        font-size: 15px;
+                    }
+                    Text {
+                        text: Printer.job.elapsed;
+                        color: Theme.text;
+                        font-family: Theme.display;
+                        font-weight: 700;
+                        font-size: 72px;
+                    }
+                    Text {
+                        text: @tr("print time · filament {}", Printer.job.filament);
+                        color: Theme.text-dim;
+                        font-size: Theme.font-m;
+                    }
+                }
+
+                // Idle
+                if !root.active && !root.finished: VerticalLayout {
+                    spacing: 6px;
+                    Text { text: @tr("State"); color: Theme.text-dim; font-size: 15px; }
+                    Text {
+                        text: Strings.status(Printer.status);
+                        color: Theme.text;
+                        font-family: Theme.display;
+                        font-weight: 700;
+                        font-size: 72px;
+                        overflow: elide;
+                    }
+                }
+
+                Rectangle { vertical-stretch: 1; }
+
+                // Temperatures and fan, one tap from their controls
                 HorizontalLayout {
-                    spacing: 14px;
-                    vertical-stretch: 1;
-                    if Printer.job-thumb.width > 0: Thumb {
-                        source: Printer.job-thumb;
-                        width: 140px;
+                    alignment: start;
+                    spacing: 8px;
+                    for h in Printer.top-heaters: Btn {
+                        text: Strings.heater-name(h) + " " + round(h.temp) + "/" + round(h.target) + "°";
+                        font-size: Theme.font-s;
+                        min-height: 44px;
+                        clicked => { Overlay.edit-temp(h); }
                     }
-                    VerticalLayout {
-                        spacing: 8px;
-                        HorizontalLayout {
-                            spacing: 8px;
-                            Text {
-                                text: Printer.job.filename;
-                                color: Theme.text;
-                                font-size: Theme.font-m;
-                                overflow: elide;
-                                horizontal-stretch: 1;
-                            }
-                            Text {
-                                text: round(Printer.job.progress * 100) + "%";
-                                color: Theme.text;
-                                font-size: Theme.font-l;
-                                font-weight: 700;
-                                horizontal-stretch: 0;
-                            }
-                        }
-                        Bar {
-                            height: 14px;
-                            value: Printer.job.progress;
-                            fill: Printer.job.state == "paused" ? Theme.warn
-                                : Printer.job.state == "error" || Printer.job.state == "cancelled" ? Theme.danger
-                                : Printer.job.state == "complete" ? Theme.ok
-                                : Theme.accent;
-                        }
-                        if Printer.job.message != "": Caption { text: Printer.job.message; overflow: elide; }
-
-                        HorizontalLayout {
-                            spacing: 24px;
-                            VerticalLayout {
-                                spacing: 4px;
-                                InfoRow { label: @tr("Elapsed"); value: Printer.job.elapsed; }
-                                InfoRow { label: @tr("Remaining"); value: Printer.job.remaining; }
-                            }
-                            VerticalLayout {
-                                spacing: 4px;
-                                InfoRow { label: @tr("Layer"); value: Printer.job.layer; }
-                                InfoRow { label: "Z"; value: Printer.position.z; }
-                            }
-                            VerticalLayout {
-                                spacing: 4px;
-                                InfoRow { label: @tr("Filament"); value: Printer.job.filament; }
-                                InfoRow { label: "Z-offset"; value: Printer.job.z-offset; }
-                            }
-                        }
-                        Rectangle { vertical-stretch: 1; }
-                    }
-                }
-
-                if Printer.printing: HorizontalLayout {
-                    spacing: Theme.gap;
-                    if Printer.job.state == "printing": Btn {
-                        text: @tr("Pause");
-                        kind: BtnKind.normal;
-                        clicked => { Actions.pause(); }
-                    }
-                    if Printer.job.state == "paused": Btn {
-                        text: @tr("Resume");
-                        kind: BtnKind.accent;
-                        clicked => { Actions.resume(); }
-                    }
-                    Btn {
-                        text: @tr("Cancel print");
-                        kind: BtnKind.danger;
-                        clicked => { Overlay.ask(@tr("Cancel the current print?"), "cancel", ""); }
-                    }
-                }
-                if !Printer.printing: HorizontalLayout {
-                    spacing: Theme.gap;
-                    Btn {
-                        text: @tr("Print again");
-                        kind: BtnKind.accent;
-                        clicked => { Overlay.open-file(Printer.job.filename); Actions.file-details(Printer.job.filename); }
-                    }
-                    Btn {
-                        text: @tr("Choose another file");
-                        clicked => { Nav.page = 4; }
+                    if Printer.has-part-fan: Btn {
+                        text: @tr("Fan {}%", round(Printer.part-fan * 100));
+                        font-size: Theme.font-s;
+                        min-height: 44px;
+                        clicked => { Overlay.tune-open = true; }
                     }
                 }
             }
         }
 
-        if Printer.printing: HorizontalLayout {
-            spacing: Theme.gap;
-            height: 64px;
-            Stepper {
-                label: @tr("Speed");
-                value: Printer.job.speed-factor + "%";
-                minus => { Actions.gcode("M220 S" + max(10, Printer.job.speed-factor - 10)); }
-                plus => { Actions.gcode("M220 S" + (Printer.job.speed-factor + 10)); }
+        HorizontalLayout {
+            height: 60px;
+            spacing: 10px;
+            Btn {
+                text: @tr("Menu");
+                icon: @image-url("../icons/menu.svg");
+                kind: BtnKind.ghost;
+                width: 132px;
+                clicked => { Overlay.menu-open = true; }
             }
-            Stepper {
-                label: @tr("Flow");
-                value: Printer.job.flow-factor + "%";
-                minus => { Actions.gcode("M221 S" + max(50, Printer.job.flow-factor - 1)); }
-                plus => { Actions.gcode("M221 S" + (Printer.job.flow-factor + 1)); }
+            Rectangle { horizontal-stretch: 1; }
+
+            if Printer.job.state == "printing": Btn {
+                text: @tr("Pause");
+                kind: BtnKind.accent;
+                width: 150px;
+                clicked => { Actions.pause(); }
             }
-            Stepper {
-                label: "Z-offset";
-                value: Printer.job.z-offset;
-                minus => { Actions.gcode("SET_GCODE_OFFSET Z_ADJUST=-0.01 MOVE=1"); }
-                plus => { Actions.gcode("SET_GCODE_OFFSET Z_ADJUST=0.01 MOVE=1"); }
+            if Printer.job.state == "paused": Btn {
+                text: @tr("Resume");
+                kind: BtnKind.accent;
+                width: 150px;
+                clicked => { Actions.resume(); }
+            }
+            if root.active: Btn {
+                text: @tr("Tune");
+                width: 150px;
+                clicked => { Overlay.tune-open = true; }
+            }
+            if root.active: Btn {
+                text: @tr("Cancel");
+                kind: BtnKind.danger-outline;
+                width: 150px;
+                clicked => { Overlay.ask(@tr("Cancel the current print?"), "cancel", ""); }
+            }
+
+            if root.finished: Btn {
+                text: @tr("Print again");
+                kind: BtnKind.accent;
+                width: 190px;
+                clicked => {
+                    Overlay.open-file(Printer.job.filename);
+                    Actions.file-details(Printer.job.filename);
+                }
+            }
+            if !root.active: Btn {
+                text: @tr("Files");
+                kind: root.finished ? BtnKind.normal : BtnKind.accent;
+                width: 150px;
+                clicked => { Nav.page = 4; }
+            }
+            if !root.active && !root.finished: Btn {
+                text: @tr("Temperature");
+                width: 170px;
+                clicked => { Nav.page = 1; }
             }
         }
     }

@@ -153,6 +153,15 @@ fn snapshot_pages(ui: &AppWindow, dir: String) -> Timer {
     }));
     steps.push(Box::new(|ui| {
         ui.global::<Overlay>().set_file_open(false);
+        ui.global::<Nav>().set_page(0);
+        ui.global::<Overlay>().set_menu_open(true);
+    }));
+    steps.push(Box::new(|ui| {
+        ui.global::<Overlay>().set_menu_open(false);
+        ui.global::<Overlay>().set_tune_open(true);
+    }));
+    steps.push(Box::new(|ui| {
+        ui.global::<Overlay>().set_tune_open(false);
         ui.global::<Settings>().invoke_load();
         ui.global::<Nav>().set_page(8);
     }));

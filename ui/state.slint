@@ -73,6 +73,8 @@ export struct PrintJob {
     progress: float,   // 0..1
     elapsed: string,
     remaining: string,
+    remaining-minutes: int,  // -1 when unknown
+    eta-clock: string,       // local "HH:MM" when the print should finish, "" when unknown
     layer: string,
     filament: string,
     message: string,
@@ -105,6 +107,9 @@ export global Printer {
     // Nozzle and bed, shown in the top bar
     in property <[Heater]> top-heaters;
     in property <[Fan]> fans;
+    // Part cooling fan ("fan"), shown on the dashboard
+    in property <bool> has-part-fan;
+    in property <float> part-fan;
     in property <PrintJob> job;
     in property <image> job-thumb;
     in property <Position> position;
@@ -276,6 +281,9 @@ export global Overlay {
 
     in-out property <bool> file-open;
     in-out property <string> file-path;
+
+    in-out property <bool> menu-open;
+    in-out property <bool> tune-open;
 
     public function ask(text: string, action: string, arg: string) {
         confirm-text = text;
