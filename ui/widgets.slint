@@ -10,6 +10,7 @@ export component Btn inherits Rectangle {
     in property <bool> enabled: true;
     in property <bool> active;
     in property <length> font-size: Theme.font-m;
+    in property <length> icon-size: 22px;
     callback clicked();
 
     property <color> base: root.active ? Theme.accent
@@ -24,6 +25,10 @@ export component Btn inherits Rectangle {
     min-height: 48px;
     min-width: 48px;
     border-radius: Theme.radius;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { root.clicked(); }
     border-width: root.kind == BtnKind.ghost ? 1px : 0px;
     border-color: Theme.border;
     background: !root.enabled ? Theme.surface : ta.pressed ? root.base.darker(0.35) : root.base;
@@ -39,8 +44,8 @@ export component Btn inherits Rectangle {
             Image {
                 source: root.icon;
                 colorize: root.fg;
-                width: 22px;
-                height: 22px;
+                width: root.icon-size;
+                height: root.icon-size;
             }
         }
         if root.text != "": Text {
@@ -186,6 +191,35 @@ export component NavItem inherits Rectangle {
     }
 
     ta := TouchArea { clicked => { root.clicked(); } }
+}
+
+// Single-line text with a cursor between the parts before and after it.
+export component CursorText inherits HorizontalLayout {
+    in property <string> before;
+    in property <string> after;
+    in property <string> placeholder;
+    alignment: start;
+    Text {
+        text: root.before;
+        color: Theme.text;
+        font-family: Theme.mono;
+        vertical-alignment: center;
+    }
+    Rectangle {
+        width: 2px;
+        background: Theme.accent;
+    }
+    Text {
+        text: root.after;
+        color: Theme.text;
+        font-family: Theme.mono;
+        vertical-alignment: center;
+    }
+    if root.before == "" && root.after == "": Text {
+        text: root.placeholder;
+        color: Theme.text-dim;
+        vertical-alignment: center;
+    }
 }
 
 // "label  value" row for info cards.

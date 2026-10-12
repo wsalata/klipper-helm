@@ -336,3 +336,6 @@ msgstr "{} - temperatura docelowa"
 
 msgid "target {}°"
 msgstr "cel {}°"
+
+msgid "Emergency stop"
+msgstr "Zatrzymanie awaryjne"

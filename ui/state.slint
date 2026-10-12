@@ -115,7 +115,9 @@ export global Printer {
     in property <FileDetails> details;
     in property <image> details-thumb;
     in property <[ConsoleLine]> console;
-    in property <string> console-input;
+    // Console input line, split at the cursor
+    in property <string> console-before;
+    in property <string> console-after;
     in property <[Preset]> presets;
 
     in-out property <string> toast;
@@ -186,10 +188,24 @@ export global Messages {
     }
 }
 
+// Names for special keys from a physical keyboard, as understood by the Rust line editor.
+export global Keys {
+    public pure function name(text: string) -> string {
+        if (text == Key.Backspace) { return "BS"; }
+        if (text == Key.Delete) { return "DEL"; }
+        if (text == Key.LeftArrow) { return "LEFT"; }
+        if (text == Key.RightArrow) { return "RIGHT"; }
+        if (text == Key.Home) { return "HOME"; }
+        if (text == Key.End) { return "END"; }
+        if (text == Key.Return) { return "ENTER"; }
+        return text;
+    }
+}
+
 export global Actions {
     callback gcode(string);
     callback console-key(string);
-    // Key pressed in the text editor dialog (edits Overlay.text-value)
+    // Key pressed in the text editor dialog (edits Overlay.text-before/-after)
     callback text-key(string);
     callback set-temp(string, float);
     callback set-fan(string, float);
@@ -254,7 +270,9 @@ export global Overlay {
     in-out property <bool> text-open;
     in-out property <string> text-title;
     in-out property <string> text-id;
-    in-out property <string> text-value;
+    // Edited text, split at the cursor
+    in-out property <string> text-before;
+    in-out property <string> text-after;
 
     in-out property <bool> file-open;
     in-out property <string> file-path;
@@ -289,7 +307,8 @@ export global Overlay {
     public function ask-text(id: string, title: string, current: string) {
         text-title = title;
         text-id = id;
-        text-value = current;
+        text-before = current;
+        text-after = "";
         text-open = true;
     }
 

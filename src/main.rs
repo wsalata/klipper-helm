@@ -1,5 +1,6 @@
 mod bridge;
 mod config;
+mod line_edit;
 mod moonraker;
 mod printer;
 mod settings;
@@ -106,17 +107,21 @@ fn wire_actions(ui: &AppWindow, tx: &UnboundedSender<Command>) {
     actions.on_console_key(move |key| {
         let Some(ui) = weak.upgrade() else { return };
         let printer = ui.global::<Printer>();
-        let mut line = printer.get_console_input().to_string();
+        let mut before = printer.get_console_before().to_string();
+        let mut after = printer.get_console_after().to_string();
         if key == "ENTER" {
-            let cmd = line.trim();
+            let cmd = format!("{before}{after}");
+            let cmd = cmd.trim();
             if !cmd.is_empty() {
                 let _ = tx.send(Command::Console(cmd.to_string()));
             }
-            line.clear();
+            before.clear();
+            after.clear();
         } else {
-            edit_line(&mut line, &key);
+            line_edit::apply(&mut before, &mut after, &key);
         }
-        printer.set_console_input(line.into());
+        printer.set_console_before(before.into());
+        printer.set_console_after(after.into());
     });
 
     // Text editor dialog (settings)
@@ -124,23 +129,12 @@ fn wire_actions(ui: &AppWindow, tx: &UnboundedSender<Command>) {
     actions.on_text_key(move |key| {
         let Some(ui) = weak.upgrade() else { return };
         let overlay = ui.global::<Overlay>();
-        let mut line = overlay.get_text_value().to_string();
-        edit_line(&mut line, &key);
-        overlay.set_text_value(line.into());
+        let mut before = overlay.get_text_before().to_string();
+        let mut after = overlay.get_text_after().to_string();
+        line_edit::apply(&mut before, &mut after, &key);
+        overlay.set_text_before(before.into());
+        overlay.set_text_after(after.into());
     });
-}
-
-/// Shared handling of editing keys: BS, CLR or characters to append.
-fn edit_line(line: &mut String, key: &str) {
-    match key {
-        "BS" => {
-            line.pop();
-        }
-        "CLR" => line.clear(),
-        // Ignore control keys from a physical keyboard
-        k if k.chars().all(|c| !c.is_control()) => line.push_str(k),
-        _ => {}
-    }
 }
 
 /// Debug builds only: steps through the views (screens, dialogs), saves each one

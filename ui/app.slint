@@ -65,12 +65,15 @@ component TopBar inherits Rectangle {
             vertical-alignment: center;
             horizontal-stretch: 0;
         }
+        // Emergency stop: acts immediately, like Klipper's own (heaters and motors off, firmware restart needed)
         Btn {
-            text: "STOP";
+            // Three clockwise arrows, as on the "twist to release" emergency stop button
+            icon: @image-url("icons/estop.svg");
+            icon-size: 28px;
             kind: BtnKind.danger;
             min-height: 36px;
             width: 86px;
-            font-size: Theme.font-s;
+            accessible-label: @tr("Emergency stop");
             clicked => { Actions.emergency-stop(); }
         }
     }

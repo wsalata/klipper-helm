@@ -1,6 +1,6 @@
 import { Theme } from "../theme.slint";
-import { Printer, Actions, ConsoleLine } from "../state.slint";
-import { Btn, BtnKind, Card, Caption } from "../widgets.slint";
+import { Printer, Actions, ConsoleLine, Keys } from "../state.slint";
+import { Btn, BtnKind, Card, Caption, CursorText } from "../widgets.slint";
 import { ListView } from "std-widgets.slint";
 
 component KbKey inherits Btn {
@@ -32,6 +32,8 @@ component GcodeKeyboard inherits VerticalLayout {
     HorizontalLayout {
         spacing: 4px;
         for k in ["Z", "X", "C", "V", "B", "N", "M", "."]: KbKey { key: k; }
+        Btn { icon: @image-url("../icons/left.svg"); min-height: 38px; clicked => { Actions.console-key("LEFT"); } }
+        Btn { icon: @image-url("../icons/right.svg"); min-height: 38px; clicked => { Actions.console-key("RIGHT"); } }
         Btn { text: @tr("space"); font-size: Theme.font-s; min-height: 38px; horizontal-stretch: 2; clicked => { Actions.console-key(" "); } }
         Btn { text: "C"; font-size: Theme.font-s; min-height: 38px; clicked => { Actions.console-key("CLR"); } }
     }
@@ -41,13 +43,8 @@ export component ConsolePage inherits Rectangle {
     // Physical keyboard (e.g. while working on a PC)
     fs := FocusScope {
         key-pressed(e) => {
-            if (e.text == Key.Return) {
-                Actions.console-key("ENTER");
-            } else if (e.text == Key.Backspace) {
-                Actions.console-key("BS");
-            } else {
-                Actions.console-key(e.text.to-uppercase());
-            }
+            // Named keys are already upper case, so this only affects typed letters
+            Actions.console-key(Keys.name(e.text).to-uppercase());
             accept
         }
 
@@ -64,16 +61,15 @@ export component ConsolePage inherits Rectangle {
                     border-radius: 8px;
                     border-width: 1px;
                     border-color: fs.has-focus ? Theme.accent : Theme.border;
-                    HorizontalLayout {
+                    clip: true;
+                    CursorText {
                         padding-left: 10px;
                         padding-right: 10px;
-                        Text {
-                            text: Printer.console-input == "" ? @tr("Type a G-code command...") : Printer.console-input;
-                            color: Printer.console-input == "" ? Theme.text-dim : Theme.text;
-                            font-family: Theme.mono;
-                            vertical-alignment: center;
-                            overflow: elide;
-                        }
+                        padding-top: 10px;
+                        padding-bottom: 10px;
+                        before: Printer.console-before;
+                        after: Printer.console-after;
+                        placeholder: @tr("Type a G-code command...");
                     }
                     TouchArea { clicked => { fs.focus(); } }
                 }

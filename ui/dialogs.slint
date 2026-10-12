@@ -1,6 +1,6 @@
 import { Theme } from "theme.slint";
-import { Printer, Actions, Overlay, Nav, Conn, Settings, Strings } from "state.slint";
-import { Btn, BtnKind, Card, Caption, InfoRow, Thumb } from "widgets.slint";
+import { Printer, Actions, Overlay, Nav, Conn, Settings, Strings, Keys } from "state.slint";
+import { Btn, BtnKind, Card, Caption, InfoRow, Thumb, CursorText } from "widgets.slint";
 
 // Dimmed backdrop that blocks touches to the screen below.
 component Scrim inherits Rectangle {
@@ -98,7 +98,7 @@ export component TextDialog inherits Scrim {
     property <bool> upper;
 
     function submit() {
-        Settings.edit-text(Overlay.text-id, Overlay.text-value);
+        Settings.edit-text(Overlay.text-id, Overlay.text-before + Overlay.text-after);
         Overlay.text-open = false;
     }
 
@@ -115,10 +115,8 @@ export component TextDialog inherits Scrim {
                     root.submit();
                 } else if (e.text == Key.Escape) {
                     Overlay.text-open = false;
-                } else if (e.text == Key.Backspace) {
-                    Actions.text-key("BS");
                 } else {
-                    Actions.text-key(e.text);
+                    Actions.text-key(Keys.name(e.text));
                 }
                 accept
             }
@@ -133,16 +131,14 @@ export component TextDialog inherits Scrim {
                     border-radius: 8px;
                     border-width: 1px;
                     border-color: Theme.accent;
-                    HorizontalLayout {
+                    clip: true;
+                    CursorText {
                         padding-left: 10px;
                         padding-right: 10px;
-                        Text {
-                            text: Overlay.text-value + "|";
-                            color: Theme.text;
-                            font-family: Theme.mono;
-                            vertical-alignment: center;
-                            overflow: elide;
-                        }
+                        padding-top: 10px;
+                        padding-bottom: 10px;
+                        before: Overlay.text-before;
+                        after: Overlay.text-after;
                     }
                 }
                 HorizontalLayout {
@@ -173,7 +169,9 @@ export component TextDialog inherits Scrim {
                 HorizontalLayout {
                     spacing: 4px;
                     Btn { text: "C"; font-size: Theme.font-s; min-height: 40px; clicked => { Actions.text-key("CLR"); } }
-                    Btn { text: @tr("space"); font-size: Theme.font-s; min-height: 40px; horizontal-stretch: 4; clicked => { Actions.text-key(" "); } }
+                    Btn { icon: @image-url("icons/left.svg"); min-height: 40px; clicked => { Actions.text-key("LEFT"); } }
+                    Btn { icon: @image-url("icons/right.svg"); min-height: 40px; clicked => { Actions.text-key("RIGHT"); } }
+                    Btn { text: @tr("space"); font-size: Theme.font-s; min-height: 40px; horizontal-stretch: 3; clicked => { Actions.text-key(" "); } }
                     Btn { text: @tr("Cancel"); kind: BtnKind.ghost; min-height: 40px; horizontal-stretch: 2; clicked => { Overlay.text-open = false; } }
                     Btn { text: "OK"; kind: BtnKind.accent; min-height: 40px; horizontal-stretch: 2; clicked => { root.submit(); } }
                 }
