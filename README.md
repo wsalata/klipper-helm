@@ -1,7 +1,5 @@
 # Klipper Helm
 
-**English** | [Polski](README.pl.md)
-
 A touch screen panel for Klipper/Moonraker, a KlipperScreen replacement written in Rust + Slint.
 On a Raspberry Pi it draws directly through KMS/DRM (no X11/Wayland); on a PC it runs in a window.
 
