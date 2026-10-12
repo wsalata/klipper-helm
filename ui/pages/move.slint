@@ -1,0 +1,107 @@
+import { Theme } from "../theme.slint";
+import { Printer, Actions } from "../state.slint";
+import { Btn, BtnKind, Card, Caption, Segmented } from "../widgets.slint";
+
+component AxisLabel inherits VerticalLayout {
+    in property <string> axis;
+    in property <string> value;
+    in property <bool> homed;
+    alignment: center;
+    Caption {
+        text: root.axis + (root.homed ? "" : "  (nie zbazowano)");
+        color: root.homed ? Theme.text-dim : Theme.warn;
+        horizontal-alignment: center;
+    }
+    Text {
+        text: root.value;
+        color: Theme.text;
+        font-size: Theme.font-l;
+        font-weight: 700;
+        horizontal-alignment: center;
+    }
+}
+
+export component MovePage inherits Rectangle {
+    property <[float]> steps: [0.1, 1, 10, 50];
+    property <int> step-index: 2;
+    property <float> step: root.steps[root.step-index];
+
+    HorizontalLayout {
+        padding: Theme.gap;
+        spacing: Theme.gap;
+
+        VerticalLayout {
+            spacing: Theme.gap;
+            horizontal-stretch: 1;
+
+            Card {
+                height: 64px;
+                HorizontalLayout {
+                    AxisLabel { axis: "X"; value: Printer.position.x; homed: Printer.position.homed-x; }
+                    AxisLabel { axis: "Y"; value: Printer.position.y; homed: Printer.position.homed-y; }
+                    AxisLabel { axis: "Z"; value: Printer.position.z; homed: Printer.position.homed-z; }
+                }
+            }
+
+            HorizontalLayout {
+                spacing: Theme.gap;
+                vertical-stretch: 1;
+                GridLayout {
+                    spacing: Theme.gap;
+                    horizontal-stretch: 3;
+                    Row {
+                        Rectangle {}
+                        Btn { text: "Y+"; icon: @image-url("../icons/up.svg"); clicked => { Actions.jog("Y", root.step); } }
+                        Rectangle {}
+                    }
+                    Row {
+                        Btn { text: "X-"; icon: @image-url("../icons/left.svg"); clicked => { Actions.jog("X", -root.step); } }
+                        Btn { text: "XY"; icon: @image-url("../icons/home.svg"); clicked => { Actions.gcode("G28 X Y"); } }
+                        Btn { text: "X+"; icon: @image-url("../icons/right.svg"); clicked => { Actions.jog("X", root.step); } }
+                    }
+                    Row {
+                        Rectangle {}
+                        Btn { text: "Y-"; icon: @image-url("../icons/down.svg"); clicked => { Actions.jog("Y", -root.step); } }
+                        Rectangle {}
+                    }
+                }
+                VerticalLayout {
+                    spacing: Theme.gap;
+                    horizontal-stretch: 1;
+                    Btn { text: "Z+"; icon: @image-url("../icons/up.svg"); clicked => { Actions.jog("Z", root.step); } }
+                    Btn { text: "Z"; icon: @image-url("../icons/home.svg"); clicked => { Actions.gcode("G28 Z"); } }
+                    Btn { text: "Z-"; icon: @image-url("../icons/down.svg"); clicked => { Actions.jog("Z", -root.step); } }
+                }
+            }
+
+            HorizontalLayout {
+                spacing: Theme.gap;
+                Caption { text: "Krok [mm]"; horizontal-stretch: 0; }
+                Segmented {
+                    items: ["0.1", "1", "10", "50"];
+                    selected <=> root.step-index;
+                }
+            }
+        }
+
+        Card {
+            width: 170px;
+            VerticalLayout {
+                padding: Theme.gap;
+                spacing: Theme.gap;
+                Caption { text: "Bazowanie"; }
+                Btn { text: "Wszystkie"; kind: BtnKind.accent; icon: @image-url("../icons/home.svg"); clicked => { Actions.gcode("G28"); } }
+                Btn { text: "X"; clicked => { Actions.gcode("G28 X"); } }
+                Btn { text: "Y"; clicked => { Actions.gcode("G28 Y"); } }
+                Btn { text: "Z"; clicked => { Actions.gcode("G28 Z"); } }
+                Rectangle { vertical-stretch: 1; }
+                Btn {
+                    text: "Wyłącz silniki";
+                    font-size: Theme.font-s;
+                    enabled: !Printer.printing;
+                    clicked => { Actions.gcode("M84"); }
+                }
+            }
+        }
+    }
+}

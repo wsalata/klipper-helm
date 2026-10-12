@@ -1,0 +1,16 @@
+[Unit]
+Description=Klipper Helm (panel dotykowy Rust + Slint)
+After=moonraker.service
+Wants=moonraker.service
+
+[Service]
+User=pi
+SupplementaryGroups=video input render
+Environment=SLINT_BACKEND=linuxkms-femtovg
+Environment=MOONRAKER_URL=ws://127.0.0.1:7125/websocket
+ExecStart=/home/pi/klipper-helm/target/release/klipper-helm
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

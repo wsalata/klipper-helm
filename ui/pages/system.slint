@@ -1,0 +1,45 @@
+import { Theme } from "../theme.slint";
+import { Printer, Overlay } from "../state.slint";
+import { Btn, BtnKind, Card, Caption, InfoRow } from "../widgets.slint";
+
+export component SystemPage inherits Rectangle {
+    HorizontalLayout {
+        padding: Theme.gap;
+        spacing: Theme.gap;
+
+        Card {
+            horizontal-stretch: 1;
+            VerticalLayout {
+                padding: 12px;
+                spacing: 10px;
+                Caption { text: "Informacje"; }
+                InfoRow { label: "Host"; value: Printer.hostname; }
+                InfoRow { label: "Stan"; value: Printer.status-label; }
+                InfoRow { label: "Klipper"; value: Printer.klipper-version; }
+                InfoRow { label: "Moonraker"; value: Printer.moonraker-url; }
+                if Printer.status-message != "": Text {
+                    text: Printer.status-message;
+                    color: Theme.text-dim;
+                    font-size: Theme.font-s;
+                    wrap: word-wrap;
+                }
+                Rectangle { vertical-stretch: 1; }
+            }
+        }
+
+        Card {
+            width: 240px;
+            VerticalLayout {
+                padding: 12px;
+                spacing: Theme.gap;
+                Caption { text: "Klipper"; }
+                Btn { text: "Restart"; clicked => { Overlay.ask("Zrestartować Klippera?", "restart", ""); } }
+                Btn { text: "Restart firmware"; clicked => { Overlay.ask("Zrestartować firmware (MCU)?", "firmware-restart", ""); } }
+                Rectangle { vertical-stretch: 1; }
+                Caption { text: "Komputer"; }
+                Btn { text: "Uruchom ponownie"; clicked => { Overlay.ask("Uruchomić ponownie komputer drukarki?", "reboot", ""); } }
+                Btn { text: "Wyłącz"; kind: BtnKind.danger; clicked => { Overlay.ask("Wyłączyć komputer drukarki?", "shutdown", ""); } }
+            }
+        }
+    }
+}

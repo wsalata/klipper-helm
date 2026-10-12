@@ -1,0 +1,28 @@
+import { Theme } from "../theme.slint";
+import { Printer, Overlay } from "../state.slint";
+import { Btn, Caption } from "../widgets.slint";
+
+export component MacrosPage inherits Rectangle {
+    property <length> pad: Theme.gap;
+    property <length> row-h: 64px;
+    property <int> cols: max(1, floor((root.width - root.pad) / 180px));
+    property <length> cell-w: (root.width - root.pad * (root.cols + 1)) / root.cols;
+
+    if Printer.macros.length == 0: Caption {
+        text: "Brak makr (gcode_macro bez prefiksu _)";
+    }
+
+    Flickable {
+        content-width: root.width;
+        content-height: ceil(Printer.macros.length / root.cols) * root.row-h + root.pad;
+        for m[i] in Printer.macros: Btn {
+            x: root.pad + mod(i, root.cols) * (root.cell-w + root.pad);
+            y: root.pad + floor(i / root.cols) * root.row-h;
+            width: root.cell-w;
+            height: root.row-h - root.pad;
+            text: m;
+            font-size: Theme.font-s;
+            clicked => { Overlay.ask("Uruchomić makro " + m + "?", "gcode", m); }
+        }
+    }
+}

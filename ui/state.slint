@@ -1,0 +1,159 @@
+// Dane i akcje współdzielone przez wszystkie ekrany.
+// Printer jest wypełniany z Rusta, Actions obsługuje Rust.
+
+export enum Conn { connecting, disconnected, not-ready, ready }
+
+export struct Heater {
+    id: string,        // nazwa obiektu Klippera, np. "extruder", "heater_generic chamber"
+    name: string,
+    temp: float,
+    target: float,
+    power: float,      // 0..1
+    settable: bool,
+}
+
+export struct Fan {
+    id: string,
+    name: string,
+    speed: float,      // 0..1
+    settable: bool,
+}
+
+export struct FileEntry {
+    path: string,
+    size: string,
+    modified: string,
+}
+
+export struct FileDetails {
+    path: string,
+    estimated: string,
+    filament: string,
+    slicer: string,
+    layer-height: string,
+}
+
+// kind: 0 = odpowiedź, 1 = komenda, 2 = błąd, 3 = informacja (//)
+export struct ConsoleLine {
+    text: string,
+    kind: int,
+}
+
+export struct Preset {
+    name: string,
+    extruder: float,
+    bed: float,
+}
+
+export struct PrintJob {
+    state: string,     // standby / printing / paused / complete / cancelled / error
+    filename: string,
+    progress: float,   // 0..1
+    elapsed: string,
+    remaining: string,
+    layer: string,
+    filament: string,
+    message: string,
+    speed-factor: int, // %
+    flow-factor: int,  // %
+    z-offset: string,
+}
+
+export struct Position {
+    x: string,
+    y: string,
+    z: string,
+    homed-x: bool,
+    homed-y: bool,
+    homed-z: bool,
+}
+
+export global Printer {
+    in property <Conn> conn: Conn.connecting;
+    in property <string> status-label: "Łączenie...";
+    in property <string> status-message;
+    in property <string> hostname: "Klipper";
+    in property <string> klipper-version;
+    in property <string> moonraker-url;
+    in property <string> clock;
+    in property <string> top-temps;
+
+    in property <[Heater]> heaters;
+    in property <[Heater]> sensors;
+    in property <[Fan]> fans;
+    in property <PrintJob> job;
+    in property <Position> position;
+    in property <float> extruder-temp;
+    in property <bool> has-extruder;
+    in property <[string]> macros;
+    in property <[FileEntry]> files;
+    in property <FileDetails> details;
+    in property <[ConsoleLine]> console;
+    in property <string> console-input;
+    in property <[Preset]> presets;
+
+    in-out property <string> toast;
+
+    out property <bool> printing: job.state == "printing" || job.state == "paused";
+}
+
+export global Actions {
+    callback gcode(string);
+    callback console-key(string);
+    callback set-temp(string, float);
+    callback set-fan(string, float);
+    callback jog(string, float);
+    callback extrude(float, float);
+    callback pause();
+    callback resume();
+    callback cancel();
+    callback emergency-stop();
+    callback restart();
+    callback firmware-restart();
+    callback refresh-files();
+    callback file-details(string);
+    callback start-print(string);
+    callback host-reboot();
+    callback host-shutdown();
+}
+
+export global Nav {
+    in-out property <int> page: 0;
+}
+
+// Stan okien nakładanych na ekran (klawiatura numeryczna, potwierdzenia, plik).
+export global Overlay {
+    in-out property <bool> numpad-open;
+    in-out property <string> numpad-title;
+    in-out property <string> numpad-id;
+    in-out property <string> numpad-hint;
+    in-out property <string> numpad-value;
+
+    in-out property <bool> confirm-open;
+    in-out property <string> confirm-text;
+    in-out property <string> confirm-action;
+    in-out property <string> confirm-arg;
+
+    in-out property <bool> file-open;
+    in-out property <string> file-path;
+
+    public function ask(text: string, action: string, arg: string) {
+        confirm-text = text;
+        confirm-action = action;
+        confirm-arg = arg;
+        confirm-open = true;
+    }
+
+    public function edit-temp(heater: Heater) {
+        numpad-title = heater.name + " - temperatura docelowa";
+        numpad-id = heater.id;
+        numpad-hint = round(heater.target) + "";
+        numpad-value = "";
+        numpad-open = true;
+    }
+
+    public function open-file(path: string) {
+        file-path = path;
+        file-open = true;
+    }
+}

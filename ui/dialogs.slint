@@ -1,0 +1,195 @@
+import { Theme } from "theme.slint";
+import { Printer, Actions, Overlay, Nav, Conn } from "state.slint";
+import { Btn, BtnKind, Card, Caption, InfoRow } from "widgets.slint";
+
+// Przyciemnione tło blokujące dotyk pod oknem.
+component Scrim inherits Rectangle {
+    callback dismiss();
+    background: #000000b0;
+    TouchArea { clicked => { root.dismiss(); } }
+}
+
+component Dialog inherits Rectangle {
+    background: Theme.surface;
+    border-radius: 14px;
+    border-width: 1px;
+    border-color: Theme.border;
+    TouchArea {}  // pochłania kliknięcia, żeby nie zamykały okna
+}
+
+export component NumpadDialog inherits Scrim {
+    dismiss => { Overlay.numpad-open = false; }
+
+    function press(k: string) {
+        if (Overlay.numpad-value == "0") {
+            Overlay.numpad-value = k;
+        } else {
+            Overlay.numpad-value = Overlay.numpad-value + k;
+        }
+    }
+    function submit(value: string) {
+        if (value.is-float()) {
+            Actions.set-temp(Overlay.numpad-id, value.to-float());
+        }
+        Overlay.numpad-open = false;
+    }
+
+    Dialog {
+        width: 320px;
+        height: min(root.height - 16px, 420px);
+        VerticalLayout {
+            padding: 12px;
+            spacing: 6px;
+            Caption { text: Overlay.numpad-title; overflow: elide; }
+            Rectangle {
+                height: 52px;
+                background: Theme.bg;
+                border-radius: 8px;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    Text {
+                        text: (Overlay.numpad-value == "" ? Overlay.numpad-hint : Overlay.numpad-value) + "°";
+                        color: Overlay.numpad-value == "" ? Theme.text-dim : Theme.text;
+                        font-size: Theme.font-xl;
+                        horizontal-alignment: right;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+            HorizontalLayout { spacing: 6px; for k in ["7", "8", "9"]: Btn { text: k; clicked => { root.press(k); } } }
+            HorizontalLayout { spacing: 6px; for k in ["4", "5", "6"]: Btn { text: k; clicked => { root.press(k); } } }
+            HorizontalLayout { spacing: 6px; for k in ["1", "2", "3"]: Btn { text: k; clicked => { root.press(k); } } }
+            HorizontalLayout {
+                spacing: 6px;
+                Btn { text: "C"; clicked => { Overlay.numpad-value = ""; } }
+                Btn { text: "0"; clicked => { root.press("0"); } }
+                Btn { text: "Wył."; font-size: Theme.font-s; clicked => { root.submit("0"); } }
+            }
+            HorizontalLayout {
+                spacing: 6px;
+                Btn { text: "Anuluj"; kind: BtnKind.ghost; clicked => { Overlay.numpad-open = false; } }
+                Btn { text: "Ustaw"; kind: BtnKind.accent; clicked => { root.submit(Overlay.numpad-value); } }
+            }
+        }
+    }
+}
+
+export component ConfirmDialog inherits Scrim {
+    dismiss => { Overlay.confirm-open = false; }
+
+    function run(action: string, arg: string) {
+        if (action == "cancel") {
+            Actions.cancel();
+        } else if (action == "restart") {
+            Actions.restart();
+        } else if (action == "firmware-restart") {
+            Actions.firmware-restart();
+        } else if (action == "reboot") {
+            Actions.host-reboot();
+        } else if (action == "shutdown") {
+            Actions.host-shutdown();
+        } else if (action == "gcode") {
+            Actions.gcode(arg);
+        }
+    }
+
+    Dialog {
+        width: min(root.width - 32px, 440px);
+        height: 190px;
+        VerticalLayout {
+            padding: 16px;
+            spacing: 12px;
+            Text {
+                text: Overlay.confirm-text;
+                color: Theme.text;
+                font-size: Theme.font-m;
+                wrap: word-wrap;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                vertical-stretch: 1;
+            }
+            HorizontalLayout {
+                spacing: Theme.gap;
+                Btn { text: "Nie"; kind: BtnKind.ghost; clicked => { Overlay.confirm-open = false; } }
+                Btn {
+                    text: "Tak";
+                    kind: Overlay.confirm-action == "gcode" ? BtnKind.accent : BtnKind.danger;
+                    clicked => {
+                        Overlay.confirm-open = false;
+                        root.run(Overlay.confirm-action, Overlay.confirm-arg);
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component FileDialog inherits Scrim {
+    dismiss => { Overlay.file-open = false; }
+    property <bool> loaded: Printer.details.path == Overlay.file-path;
+
+    Dialog {
+        width: min(root.width - 32px, 520px);
+        height: min(root.height - 16px, 330px);
+        VerticalLayout {
+            padding: 16px;
+            spacing: 10px;
+            Text {
+                text: Overlay.file-path;
+                color: Theme.text;
+                font-size: Theme.font-m;
+                font-weight: 700;
+                wrap: word-wrap;
+            }
+            InfoRow { label: "Szacowany czas"; value: root.loaded ? Printer.details.estimated : "..."; }
+            InfoRow { label: "Filament"; value: root.loaded ? Printer.details.filament : "..."; }
+            InfoRow { label: "Wysokość warstwy"; value: root.loaded ? Printer.details.layer-height : "..."; }
+            InfoRow { label: "Slicer"; value: root.loaded ? Printer.details.slicer : "..."; }
+            Rectangle { vertical-stretch: 1; }
+            HorizontalLayout {
+                spacing: Theme.gap;
+                Btn { text: "Zamknij"; kind: BtnKind.ghost; clicked => { Overlay.file-open = false; } }
+                Btn {
+                    text: "Drukuj";
+                    kind: BtnKind.accent;
+                    enabled: Printer.conn == Conn.ready && !Printer.printing;
+                    clicked => {
+                        Actions.start-print(Overlay.file-path);
+                        Overlay.file-open = false;
+                        Nav.page = 0;
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Pokazywany zamiast ekranu, gdy Klipper nie jest gotowy lub brak połączenia.
+export component NotReadyPanel inherits Rectangle {
+    background: Theme.bg;
+    VerticalLayout {
+        alignment: center;
+        padding: 24px;
+        spacing: 14px;
+        Text {
+            text: Printer.status-label;
+            color: Printer.conn == Conn.connecting ? Theme.text : Theme.warn;
+            font-size: Theme.font-l;
+            font-weight: 700;
+            horizontal-alignment: center;
+        }
+        Text {
+            text: Printer.status-message;
+            color: Theme.text-dim;
+            wrap: word-wrap;
+            horizontal-alignment: center;
+        }
+        if Printer.conn == Conn.not-ready: HorizontalLayout {
+            alignment: center;
+            spacing: Theme.gap;
+            Btn { text: "Restart"; width: 200px; clicked => { Actions.restart(); } }
+            Btn { text: "Restart firmware"; kind: BtnKind.accent; width: 220px; clicked => { Actions.firmware-restart(); } }
+        }
+    }
+}

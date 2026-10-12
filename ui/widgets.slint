@@ -1,0 +1,190 @@
+import { Theme } from "theme.slint";
+import { Heater } from "state.slint";
+
+export enum BtnKind { normal, accent, danger, ghost }
+
+export component Btn inherits Rectangle {
+    in property <string> text;
+    in property <image> icon;
+    in property <BtnKind> kind: BtnKind.normal;
+    in property <bool> enabled: true;
+    in property <bool> active;
+    in property <length> font-size: Theme.font-m;
+    callback clicked();
+
+    property <color> base: root.active ? Theme.accent
+        : root.kind == BtnKind.accent ? Theme.accent
+        : root.kind == BtnKind.danger ? Theme.danger
+        : root.kind == BtnKind.ghost ? transparent
+        : Theme.surface-2;
+    property <color> fg: !root.enabled ? Theme.text-dim
+        : (root.active || root.kind == BtnKind.accent || root.kind == BtnKind.danger) ? #ffffff
+        : Theme.text;
+
+    min-height: 48px;
+    min-width: 48px;
+    border-radius: Theme.radius;
+    border-width: root.kind == BtnKind.ghost ? 1px : 0px;
+    border-color: Theme.border;
+    background: !root.enabled ? Theme.surface : ta.pressed ? root.base.darker(0.35) : root.base;
+    animate background { duration: 80ms; }
+
+    HorizontalLayout {
+        alignment: center;
+        spacing: 8px;
+        padding-left: 8px;
+        padding-right: 8px;
+        if root.icon.width > 0: VerticalLayout {
+            alignment: center;
+            Image {
+                source: root.icon;
+                colorize: root.fg;
+                width: 22px;
+                height: 22px;
+            }
+        }
+        if root.text != "": Text {
+            text: root.text;
+            color: root.fg;
+            font-size: root.font-size;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+            overflow: elide;
+        }
+    }
+
+    ta := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component Card inherits Rectangle {
+    background: Theme.surface;
+    border-radius: Theme.radius;
+}
+
+export component Caption inherits Text {
+    color: Theme.text-dim;
+    font-size: Theme.font-s;
+    vertical-alignment: center;
+}
+
+// Wybór jednej z kilku opcji (np. krok ruchu).
+export component Segmented inherits HorizontalLayout {
+    in property <[string]> items;
+    in-out property <int> selected;
+    spacing: 4px;
+    for item[i] in root.items: Btn {
+        text: item;
+        font-size: Theme.font-s;
+        active: i == root.selected;
+        clicked => { root.selected = i; }
+    }
+}
+
+export component Bar inherits Rectangle {
+    in property <float> value;
+    in property <color> fill: Theme.accent;
+    height: 6px;
+    border-radius: self.height / 2;
+    background: Theme.surface-2;
+    Rectangle {
+        x: 0;
+        width: parent.width * max(0, min(1, root.value));
+        height: parent.height;
+        border-radius: parent.border-radius;
+        background: root.fill;
+    }
+}
+
+export component HeaterTile inherits Rectangle {
+    in property <Heater> heater;
+    callback clicked();
+
+    background: ta.pressed ? Theme.surface-2 : Theme.surface;
+    border-radius: Theme.radius;
+    border-width: root.heater.target > 0 ? 2px : 0px;
+    border-color: Theme.hot;
+
+    VerticalLayout {
+        padding: 10px;
+        spacing: 2px;
+        Text {
+            text: root.heater.name;
+            color: Theme.text-dim;
+            font-size: Theme.font-s;
+            overflow: elide;
+        }
+        Text {
+            text: round(root.heater.temp) + "°";
+            color: Theme.text;
+            font-size: Theme.font-xl;
+            font-weight: 700;
+        }
+        Text {
+            text: root.heater.target > 0 ? "cel " + round(root.heater.target) + "°" : "wyłączony";
+            color: root.heater.target > 0 ? Theme.hot : Theme.text-dim;
+            font-size: Theme.font-s;
+        }
+        Bar { value: root.heater.power; fill: Theme.hot; }
+    }
+
+    ta := TouchArea {
+        enabled: root.heater.settable;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component NavItem inherits Rectangle {
+    in property <image> icon;
+    in property <string> text;
+    in property <bool> active;
+    callback clicked();
+
+    background: root.active ? Theme.surface-2 : ta.pressed ? Theme.surface : transparent;
+
+    Rectangle {
+        x: 0;
+        width: 3px;
+        height: parent.height;
+        background: root.active ? Theme.accent : transparent;
+    }
+
+    VerticalLayout {
+        alignment: center;
+        spacing: 2px;
+        HorizontalLayout {
+            alignment: center;
+            Image {
+                source: root.icon;
+                colorize: root.active ? Theme.accent : Theme.text-dim;
+                width: 24px;
+                height: 24px;
+            }
+        }
+        Text {
+            text: root.text;
+            font-size: 11px;
+            color: root.active ? Theme.text : Theme.text-dim;
+            horizontal-alignment: center;
+        }
+    }
+
+    ta := TouchArea { clicked => { root.clicked(); } }
+}
+
+// Wiersz "etykieta  wartość" do kart informacyjnych.
+export component InfoRow inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> value;
+    spacing: 8px;
+    Caption { text: root.label; horizontal-stretch: 0; }
+    Text {
+        text: root.value;
+        color: Theme.text;
+        horizontal-alignment: right;
+        horizontal-stretch: 1;
+        overflow: elide;
+    }
+}

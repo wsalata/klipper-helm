@@ -1,0 +1,75 @@
+import { Theme } from "../theme.slint";
+import { Printer, Actions, Overlay, FileEntry } from "../state.slint";
+import { Btn, BtnKind, Card, Caption } from "../widgets.slint";
+import { ListView } from "std-widgets.slint";
+
+component FileRow inherits Rectangle {
+    in property <FileEntry> file;
+    callback clicked();
+    height: 58px;
+    background: ta.pressed ? Theme.surface-2 : transparent;
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 12px;
+        VerticalLayout {
+            alignment: center;
+            Image { source: @image-url("../icons/files.svg"); colorize: Theme.text-dim; width: 22px; height: 22px; }
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            Text { text: root.file.path; color: Theme.text; overflow: elide; }
+            Caption { text: root.file.modified + "  ·  " + root.file.size; }
+        }
+    }
+    Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        background: Theme.border;
+    }
+
+    ta := TouchArea { clicked => { root.clicked(); } }
+}
+
+export component FilesPage inherits Rectangle {
+    VerticalLayout {
+        padding: Theme.gap;
+        spacing: Theme.gap;
+
+        HorizontalLayout {
+            spacing: Theme.gap;
+            Text {
+                text: "Pliki G-code (" + Printer.files.length + ")";
+                color: Theme.text;
+                font-size: Theme.font-m;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+            Btn {
+                text: "Odśwież";
+                icon: @image-url("../icons/refresh.svg");
+                width: 140px;
+                clicked => { Actions.refresh-files(); }
+            }
+        }
+
+        Card {
+            vertical-stretch: 1;
+            if Printer.files.length == 0: Caption {
+                text: "Brak plików";
+                horizontal-alignment: center;
+            }
+            ListView {
+                for f in Printer.files: FileRow {
+                    file: f;
+                    clicked => {
+                        Overlay.open-file(f.path);
+                        Actions.file-details(f.path);
+                    }
+                }
+            }
+        }
+    }
+}

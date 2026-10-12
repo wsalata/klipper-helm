@@ -1,0 +1,157 @@
+import { Theme } from "theme.slint";
+import { Printer, Actions, Overlay, Nav, Conn } from "state.slint";
+import { Btn, BtnKind, NavItem } from "widgets.slint";
+import { NumpadDialog, ConfirmDialog, FileDialog, NotReadyPanel } from "dialogs.slint";
+import { DashboardPage } from "pages/dashboard.slint";
+import { TemperaturePage } from "pages/temperature.slint";
+import { MovePage } from "pages/move.slint";
+import { ExtrudePage } from "pages/extrude.slint";
+import { FilesPage } from "pages/files.slint";
+import { MacrosPage } from "pages/macros.slint";
+import { ConsolePage } from "pages/console.slint";
+import { SystemPage } from "pages/system.slint";
+
+export { Printer, Actions, Overlay, Nav }
+
+component TopBar inherits Rectangle {
+    height: 46px;
+    background: Theme.surface;
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 6px;
+        padding-top: 5px;
+        padding-bottom: 5px;
+        spacing: 12px;
+
+        Text {
+            text: Printer.hostname;
+            color: Theme.text;
+            font-weight: 700;
+            vertical-alignment: center;
+            horizontal-stretch: 0;
+        }
+        Rectangle {
+            horizontal-stretch: 0;
+            border-radius: self.height / 2;
+            background: Printer.conn != Conn.ready ? Theme.danger
+                : Printer.job.state == "printing" ? Theme.accent
+                : Printer.job.state == "paused" ? Theme.warn
+                : Printer.job.state == "error" ? Theme.danger
+                : Theme.ok;
+            HorizontalLayout {
+                padding-left: 12px;
+                padding-right: 12px;
+                Text {
+                    text: Printer.status-label;
+                    color: #ffffff;
+                    font-size: Theme.font-s;
+                    vertical-alignment: center;
+                }
+            }
+        }
+        Rectangle { horizontal-stretch: 1; }
+        Text {
+            text: Printer.top-temps;
+            color: Theme.text-dim;
+            font-size: Theme.font-s;
+            vertical-alignment: center;
+            horizontal-stretch: 0;
+        }
+        Text {
+            text: Printer.clock;
+            color: Theme.text;
+            vertical-alignment: center;
+            horizontal-stretch: 0;
+        }
+        Btn {
+            text: "STOP";
+            kind: BtnKind.danger;
+            min-height: 36px;
+            width: 86px;
+            font-size: Theme.font-s;
+            clicked => { Actions.emergency-stop(); }
+        }
+    }
+}
+
+export component AppWindow inherits Window {
+    title: "Klipper Helm";
+    preferred-width: 800px;
+    preferred-height: 480px;
+    background: Theme.bg;
+    default-font-size: Theme.font-m;
+
+    property <[{ icon: image, text: string }]> nav-items: [
+        { icon: @image-url("icons/home.svg"), text: "Pulpit" },
+        { icon: @image-url("icons/thermo.svg"), text: "Temp." },
+        { icon: @image-url("icons/move.svg"), text: "Ruch" },
+        { icon: @image-url("icons/extrude.svg"), text: "Filament" },
+        { icon: @image-url("icons/files.svg"), text: "Pliki" },
+        { icon: @image-url("icons/macro.svg"), text: "Makra" },
+        { icon: @image-url("icons/console.svg"), text: "Konsola" },
+        { icon: @image-url("icons/system.svg"), text: "System" },
+    ];
+    // Konsola i System działają też, gdy Klipper nie jest gotowy
+    property <bool> blocked: Printer.conn != Conn.ready && Nav.page != 6 && Nav.page != 7;
+
+    VerticalLayout {
+        TopBar {}
+        HorizontalLayout {
+            Rectangle {
+                width: 84px;
+                background: Theme.surface;
+                VerticalLayout {
+                    for item[i] in root.nav-items: NavItem {
+                        icon: item.icon;
+                        text: item.text;
+                        active: Nav.page == i;
+                        clicked => { Nav.page = i; }
+                    }
+                }
+            }
+            Rectangle {
+                if root.blocked: NotReadyPanel { width: 100%; height: 100%; }
+                if !root.blocked && Nav.page == 0: DashboardPage { width: 100%; height: 100%; }
+                if !root.blocked && Nav.page == 1: TemperaturePage { width: 100%; height: 100%; }
+                if !root.blocked && Nav.page == 2: MovePage { width: 100%; height: 100%; }
+                if !root.blocked && Nav.page == 3: ExtrudePage { width: 100%; height: 100%; }
+                if !root.blocked && Nav.page == 4: FilesPage { width: 100%; height: 100%; }
+                if !root.blocked && Nav.page == 5: MacrosPage { width: 100%; height: 100%; }
+                if Nav.page == 6: ConsolePage { width: 100%; height: 100%; }
+                if Nav.page == 7: SystemPage { width: 100%; height: 100%; }
+            }
+        }
+    }
+
+    if Overlay.numpad-open: NumpadDialog { width: 100%; height: 100%; }
+    if Overlay.confirm-open: ConfirmDialog { width: 100%; height: 100%; }
+    if Overlay.file-open: FileDialog { width: 100%; height: 100%; }
+
+    if Printer.toast != "": Rectangle {
+        y: parent.height - self.height - 16px;
+        width: min(parent.width - 32px, 560px);
+        height: 52px;
+        border-radius: Theme.radius;
+        background: #2d3340;
+        border-width: 1px;
+        border-color: Theme.danger;
+        HorizontalLayout {
+            padding-left: 14px;
+            padding-right: 14px;
+            Text {
+                text: Printer.toast;
+                color: Theme.text;
+                font-size: Theme.font-s;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+        }
+        TouchArea { clicked => { Printer.toast = ""; } }
+        Timer {
+            interval: 5s;
+            running: true;
+            triggered => { Printer.toast = ""; }
+        }
+    }
+}

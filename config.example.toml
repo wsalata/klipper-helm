@@ -1,0 +1,23 @@
+# Skopiuj do ~/.config/klipper-helm/config.toml (albo wskaż przez KLIPPER_HELM_CONFIG).
+# Zmienna MOONRAKER_URL ma pierwszeństwo przed moonraker_url.
+
+moonraker_url = "ws://127.0.0.1:7125/websocket"
+
+# Prędkości ruchu ręcznego [mm/s]
+xy_speed = 100
+z_speed = 10
+
+[[preset]]
+name = "PLA"
+extruder = 210
+bed = 60
+
+[[preset]]
+name = "PETG"
+extruder = 240
+bed = 80
+
+[[preset]]
+name = "ABS"
+extruder = 250
+bed = 100

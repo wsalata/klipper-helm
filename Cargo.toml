@@ -1,0 +1,30 @@
+[package]
+name = "klipper-helm"
+version = "0.1.0"
+edition = "2024"
+description = "Panel dotykowy dla Klippera (zamiennik KlipperScreen) w Rust + Slint"
+
+[dependencies]
+# Domyślne funkcje (winit) pozwalają uruchamiać panel w oknie na PC,
+# linuxkms rysuje bezpośrednio na ekranie Raspberry Pi bez X11/Wayland.
+slint = { version = "1.18", features = ["backend-linuxkms-noseat"] }
+tokio = { version = "1", features = ["rt", "macros", "sync", "time", "net"] }
+tokio-tungstenite = "0.30"
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+anyhow = "1"
+
+[build-dependencies]
+slint-build = "1.18"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros", "net", "time"] }

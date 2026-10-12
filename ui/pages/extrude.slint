@@ -1,0 +1,99 @@
+import { Theme } from "../theme.slint";
+import { Printer, Actions, Overlay, Fan } from "../state.slint";
+import { Btn, BtnKind, Card, Caption, Segmented, Bar } from "../widgets.slint";
+
+component FanRow inherits VerticalLayout {
+    in property <Fan> fan;
+    spacing: 6px;
+    HorizontalLayout {
+        Text { text: root.fan.name; color: Theme.text; overflow: elide; horizontal-stretch: 1; }
+        Text { text: round(root.fan.speed * 100) + "%"; color: Theme.text; font-weight: 700; horizontal-stretch: 0; }
+    }
+    if root.fan.settable: HorizontalLayout {
+        spacing: 4px;
+        for v in [0, 25, 50, 75, 100]: Btn {
+            text: v + "";
+            font-size: Theme.font-s;
+            min-height: 40px;
+            active: round(root.fan.speed * 100) == v;
+            clicked => { Actions.set-fan(root.fan.id, v / 100); }
+        }
+    }
+    if !root.fan.settable: Bar { value: root.fan.speed; }
+}
+
+export component ExtrudePage inherits Rectangle {
+    property <[float]> lengths: [1, 5, 10, 25, 50];
+    property <[float]> speeds: [1, 2, 5, 10];
+    property <int> length-index: 2;
+    property <int> speed-index: 1;
+    property <bool> cold: Printer.extruder-temp < 170;
+
+    HorizontalLayout {
+        padding: Theme.gap;
+        spacing: Theme.gap;
+
+        Card {
+            horizontal-stretch: 3;
+            VerticalLayout {
+                padding: 12px;
+                spacing: 10px;
+
+                HorizontalLayout {
+                    spacing: 12px;
+                    Text {
+                        text: "Dysza " + round(Printer.extruder-temp) + "°";
+                        color: Theme.text;
+                        font-size: Theme.font-l;
+                        font-weight: 700;
+                        horizontal-stretch: 0;
+                    }
+                    Caption {
+                        text: root.cold ? "Za zimno na ekstruzję (min. 170°)" : "";
+                        color: Theme.warn;
+                        horizontal-stretch: 1;
+                    }
+                }
+
+                Caption { text: "Długość [mm]"; }
+                Segmented { items: ["1", "5", "10", "25", "50"]; selected <=> root.length-index; }
+                Caption { text: "Prędkość [mm/s]"; }
+                Segmented { items: ["1", "2", "5", "10"]; selected <=> root.speed-index; }
+
+                Rectangle { vertical-stretch: 1; }
+
+                HorizontalLayout {
+                    spacing: Theme.gap;
+                    Btn {
+                        text: "Wycofaj";
+                        icon: @image-url("../icons/up.svg");
+                        enabled: !root.cold && !Printer.printing;
+                        clicked => { Actions.extrude(-root.lengths[root.length-index], root.speeds[root.speed-index]); }
+                    }
+                    Btn {
+                        text: "Ekstruduj";
+                        kind: BtnKind.accent;
+                        icon: @image-url("../icons/down.svg");
+                        enabled: !root.cold && !Printer.printing;
+                        clicked => { Actions.extrude(root.lengths[root.length-index], root.speeds[root.speed-index]); }
+                    }
+                }
+            }
+        }
+
+        Card {
+            horizontal-stretch: 2;
+            VerticalLayout {
+                padding: 12px;
+                spacing: 14px;
+                alignment: start;
+                HorizontalLayout {
+                    spacing: 8px;
+                    Image { source: @image-url("../icons/fan.svg"); colorize: Theme.text-dim; width: 20px; height: 20px; }
+                    Caption { text: "Wentylatory"; }
+                }
+                for f in Printer.fans: FanRow { fan: f; }
+            }
+        }
+    }
+}

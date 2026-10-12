@@ -1,0 +1,96 @@
+import { Theme } from "../theme.slint";
+import { Printer, Actions, Overlay, Heater } from "../state.slint";
+import { Btn, BtnKind, Card, Caption, Bar } from "../widgets.slint";
+import { ScrollView } from "std-widgets.slint";
+
+component HeaterRow inherits Rectangle {
+    in property <Heater> heater;
+    height: 64px;
+    background: ta.pressed ? Theme.surface-2 : transparent;
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 12px;
+        VerticalLayout {
+            alignment: center;
+            spacing: 4px;
+            horizontal-stretch: 1;
+            Text { text: root.heater.name; color: Theme.text; overflow: elide; }
+            if root.heater.settable: Bar { value: root.heater.power; fill: Theme.hot; }
+        }
+        Text {
+            text: round(root.heater.temp * 10) / 10 + "°";
+            color: Theme.text;
+            font-size: Theme.font-l;
+            font-weight: 700;
+            vertical-alignment: center;
+            horizontal-alignment: right;
+            width: 100px;
+        }
+        if root.heater.settable: Rectangle {
+            width: 96px;
+            border-radius: 8px;
+            background: Theme.surface-2;
+            border-width: root.heater.target > 0 ? 2px : 0px;
+            border-color: Theme.hot;
+            Text {
+                text: root.heater.target > 0 ? round(root.heater.target) + "°" : "wył.";
+                color: root.heater.target > 0 ? Theme.hot : Theme.text-dim;
+                font-size: Theme.font-m;
+            }
+        }
+        if !root.heater.settable: Rectangle { width: 96px; }
+    }
+    Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        background: Theme.border;
+    }
+
+    ta := TouchArea {
+        enabled: root.heater.settable;
+        clicked => { Overlay.edit-temp(root.heater); }
+    }
+}
+
+export component TemperaturePage inherits Rectangle {
+    HorizontalLayout {
+        padding: Theme.gap;
+        spacing: Theme.gap;
+
+        Card {
+            horizontal-stretch: 1;
+            ScrollView {
+                VerticalLayout {
+                    alignment: start;
+                    for h in Printer.heaters: HeaterRow { heater: h; }
+                    for s in Printer.sensors: HeaterRow { heater: s; }
+                }
+            }
+        }
+
+        Card {
+            width: 180px;
+            VerticalLayout {
+                padding: Theme.gap;
+                spacing: Theme.gap;
+                Caption { text: "Presety"; }
+                for p in Printer.presets: Btn {
+                    text: p.name;
+                    clicked => {
+                        Actions.set-temp("extruder", p.extruder);
+                        Actions.set-temp("heater_bed", p.bed);
+                    }
+                }
+                Rectangle { vertical-stretch: 1; }
+                Btn {
+                    text: "Wyłącz grzanie";
+                    kind: BtnKind.danger;
+                    font-size: Theme.font-s;
+                    clicked => { Actions.gcode("TURN_OFF_HEATERS"); }
+                }
+            }
+        }
+    }
+}

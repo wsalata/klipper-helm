@@ -1,0 +1,114 @@
+import { Theme } from "../theme.slint";
+import { Printer, Actions, ConsoleLine } from "../state.slint";
+import { Btn, BtnKind, Card, Caption } from "../widgets.slint";
+import { ListView } from "std-widgets.slint";
+
+component KbKey inherits Btn {
+    in property <string> key;
+    text: root.key;
+    font-size: Theme.font-s;
+    min-height: 38px;
+    min-width: 30px;
+    horizontal-stretch: 1;
+    clicked => { Actions.console-key(root.key); }
+}
+
+// Klawiatura pod G-code: wielkie litery, cyfry i kilka znaków specjalnych.
+component GcodeKeyboard inherits VerticalLayout {
+    spacing: 4px;
+    HorizontalLayout {
+        spacing: 4px;
+        for k in ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]: KbKey { key: k; }
+        Btn { text: "Usuń"; font-size: Theme.font-s; min-height: 38px; horizontal-stretch: 1.5; clicked => { Actions.console-key("BS"); } }
+    }
+    HorizontalLayout {
+        spacing: 4px;
+        for k in ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "-"]: KbKey { key: k; }
+    }
+    HorizontalLayout {
+        spacing: 4px;
+        for k in ["A", "S", "D", "F", "G", "H", "J", "K", "L", "=", "_"]: KbKey { key: k; }
+    }
+    HorizontalLayout {
+        spacing: 4px;
+        for k in ["Z", "X", "C", "V", "B", "N", "M", "."]: KbKey { key: k; }
+        Btn { text: "spacja"; font-size: Theme.font-s; min-height: 38px; horizontal-stretch: 2; clicked => { Actions.console-key(" "); } }
+        Btn { text: "C"; font-size: Theme.font-s; min-height: 38px; clicked => { Actions.console-key("CLR"); } }
+    }
+}
+
+export component ConsolePage inherits Rectangle {
+    // Fizyczna klawiatura (np. podczas pracy na PC)
+    fs := FocusScope {
+        key-pressed(e) => {
+            if (e.text == Key.Return) {
+                Actions.console-key("ENTER");
+            } else if (e.text == Key.Backspace) {
+                Actions.console-key("BS");
+            } else {
+                Actions.console-key(e.text.to-uppercase());
+            }
+            accept
+        }
+
+        VerticalLayout {
+            padding: Theme.gap;
+            spacing: 6px;
+
+            HorizontalLayout {
+                spacing: Theme.gap;
+                height: 46px;
+                Rectangle {
+                    horizontal-stretch: 1;
+                    background: Theme.bg;
+                    border-radius: 8px;
+                    border-width: 1px;
+                    border-color: fs.has-focus ? Theme.accent : Theme.border;
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        Text {
+                            text: Printer.console-input == "" ? "Wpisz komendę G-code..." : Printer.console-input;
+                            color: Printer.console-input == "" ? Theme.text-dim : Theme.text;
+                            font-family: Theme.mono;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+                    }
+                    TouchArea { clicked => { fs.focus(); } }
+                }
+                Btn {
+                    text: "Wyślij";
+                    kind: BtnKind.accent;
+                    width: 110px;
+                    clicked => { Actions.console-key("ENTER"); }
+                }
+            }
+
+            Card {
+                vertical-stretch: 1;
+                background: Theme.bg;
+                ListView {
+                    for line in Printer.console: HorizontalLayout {
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        padding-top: 2px;
+                        padding-bottom: 2px;
+                        Text {
+                            text: line.text;
+                            wrap: word-wrap;
+                            font-family: Theme.mono;
+                            font-size: 13px;
+                            color: line.kind == 1 ? Theme.accent
+                                : line.kind == 2 ? Theme.danger
+                                : line.kind == 3 ? Theme.text-dim
+                                : Theme.text;
+                        }
+                    }
+                }
+            }
+
+            GcodeKeyboard {}
+        }
+    }
+}
