@@ -21,6 +21,7 @@ export struct Fan {
 
 export struct FileEntry {
     path: string,
+    thumb: image,
     size: string,
     modified: string,
 }
@@ -88,6 +89,8 @@ export global Printer {
     in property <[string]> macros;
     in property <[FileEntry]> files;
     in property <FileDetails> details;
+    in property <image> details-thumb;
+    in property <image> job-thumb;
     in property <[ConsoleLine]> console;
     in property <string> console-input;
     in property <[Preset]> presets;

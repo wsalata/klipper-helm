@@ -59,6 +59,20 @@ export component Btn inherits Rectangle {
     }
 }
 
+// Miniaturka wydruku; slicery zapisują je z przezroczystym tłem.
+export component Thumb inherits Rectangle {
+    in property <image> source;
+    background: Theme.surface-2;
+    border-radius: 8px;
+    clip: true;
+    Image {
+        source: root.source;
+        width: parent.width;
+        height: parent.height;
+        image-fit: contain;
+    }
+}
+
 export component Card inherits Rectangle {
     background: Theme.surface;
     border-radius: Theme.radius;

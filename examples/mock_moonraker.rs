@@ -1,12 +1,22 @@
 //! Udawany Moonraker do pracy nad UI bez drukarki.
 //! Uruchom: `cargo run --example mock_moonraker`, potem
 //! `MOONRAKER_URL=ws://127.0.0.1:7125/websocket cargo run`.
-//! Symuluje nagrzewanie, wydruk w toku i odpowiedzi na G-code.
+//! Symuluje nagrzewanie, wydruk w toku, odpowiedzi na G-code i miniaturki plików
+//! (serwowane przez HTTP na tym samym porcie, jak w prawdziwym Moonrakerze).
 
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
 use std::time::Duration;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
+
+/// (ścieżka, czas modyfikacji, rozmiar, czy ma miniaturki)
+const FILES: &[(&str, f64, u64, bool)] = &[
+    ("benchy_0.2mm_PLA.gcode", 1760200000.0, 4_200_000, true),
+    ("calibration/cube_20mm.gcode", 1760100000.0, 820_000, true),
+    ("voron_logo_PETG.gcode", 1759900000.0, 2_500_000, true),
+    ("stary_plik_bez_miniaturki.gcode", 1750000000.0, 150_000, false),
+];
 use tokio_tungstenite::{accept_async, tungstenite::Message};
 
 #[tokio::main(flavor = "current_thread")]
@@ -83,6 +93,11 @@ impl Sim {
 }
 
 async fn client(stream: TcpStream) -> anyhow::Result<()> {
+    let mut head = [0u8; 32];
+    let n = stream.peek(&mut head).await?;
+    if head[..n].starts_with(b"GET /server/files/") {
+        return serve_thumb(stream).await;
+    }
     let ws = accept_async(stream).await?;
     let (mut tx, mut rx) = ws.split();
     let mut sim = Sim {
@@ -131,15 +146,11 @@ async fn client(stream: TcpStream) -> anyhow::Result<()> {
                         { "message": "// Homing complete", "time": 0.0, "type": "response" },
                         { "message": "ok", "time": 0.0, "type": "response" },
                     ]}),
-                    "server.files.list" => json!([
-                        { "path": "benchy_0.2mm_PLA.gcode", "modified": 1760200000.0, "size": 4_200_000 },
-                        { "path": "calibration/cube_20mm.gcode", "modified": 1760100000.0, "size": 820_000 },
-                        { "path": "voron_logo_PETG.gcode", "modified": 1759900000.0, "size": 2_500_000 },
-                    ]),
-                    "server.files.metadata" => json!({
-                        "estimated_time": 5400.0, "filament_total": 5300.0, "layer_height": 0.2,
-                        "first_layer_height": 0.2, "object_height": 24.2, "slicer": "OrcaSlicer", "slicer_version": "2.3.0",
-                    }),
+                    "server.files.list" => FILES
+                        .iter()
+                        .map(|(path, modified, size, _)| json!({ "path": path, "modified": modified, "size": size }))
+                        .collect(),
+                    "server.files.metadata" => metadata(req["params"]["filename"].as_str().unwrap_or("")),
                     "printer.gcode.script" => {
                         let script = req["params"]["script"].as_str().unwrap_or("");
                         for line in script.lines() {
@@ -186,4 +197,102 @@ async fn client(stream: TcpStream) -> anyhow::Result<()> {
             }
         }
     }
+}
+
+fn metadata(filename: &str) -> Value {
+    let (modified, has_thumbs) = FILES
+        .iter()
+        .find(|f| f.0 == filename)
+        .map_or((0.0, false), |f| (f.1, f.3));
+    let stem = filename.rsplit('/').next().unwrap_or(filename).trim_end_matches(".gcode");
+    let thumbnails: Vec<Value> = if has_thumbs {
+        [32, 300]
+            .iter()
+            .map(|s| json!({ "width": s, "height": s, "size": 1000, "relative_path": format!(".thumbs/{stem}-{s}x{s}.png") }))
+            .collect()
+    } else {
+        Vec::new()
+    };
+    json!({
+        "modified": modified, "estimated_time": 5400.0, "filament_total": 5300.0, "layer_height": 0.2,
+        "first_layer_height": 0.2, "object_height": 24.2, "slicer": "OrcaSlicer", "slicer_version": "2.3.0",
+        "thumbnails": thumbnails,
+    })
+}
+
+/// GET /server/files/gcodes/.../.thumbs/<nazwa>-<W>x<H>.png
+async fn serve_thumb(mut stream: TcpStream) -> anyhow::Result<()> {
+    let mut request = Vec::new();
+    let mut buf = [0u8; 1024];
+    while !request.windows(4).any(|w| w == b"\r\n\r\n") {
+        let n = stream.read(&mut buf).await?;
+        if n == 0 {
+            break;
+        }
+        request.extend_from_slice(&buf[..n]);
+    }
+    let request = String::from_utf8_lossy(&request);
+    let path = request.split_whitespace().nth(1).unwrap_or("");
+    println!("HTTP {path}");
+    let name = path.rsplit('/').next().unwrap_or("").trim_end_matches(".png");
+    let (stem, dims) = name.rsplit_once('-').unwrap_or((name, "64x64"));
+    let size = dims.split('x').next().and_then(|w| w.parse().ok()).unwrap_or(64u32).clamp(8, 512);
+
+    let body = render_thumb(stem, size)?;
+    let head = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        body.len()
+    );
+    stream.write_all(head.as_bytes()).await?;
+    stream.write_all(&body).await?;
+    stream.shutdown().await?;
+    Ok(())
+}
+
+/// Udawany render wydruku: kolorowa kula na podstawce, przezroczyste tło jak w slicerach.
+fn render_thumb(stem: &str, size: u32) -> anyhow::Result<Vec<u8>> {
+    let hash = stem.bytes().fold(7u32, |h, b| h.wrapping_mul(31).wrapping_add(b as u32));
+    let hue = (hash % 360) as f32;
+    let color = |light: f32| hsl(hue, 0.7, light);
+
+    let mut pixels = Vec::with_capacity((size * size * 4) as usize);
+    for y in 0..size {
+        for x in 0..size {
+            let (u, v) = ((x as f32 + 0.5) / size as f32, (y as f32 + 0.5) / size as f32);
+            let (dx, dy) = (u - 0.5, v - 0.47);
+            let px = if dx * dx + dy * dy < 0.31 * 0.31 {
+                // Światło z lewej góry
+                let shade = 0.65 - ((u - 0.38).powi(2) + (v - 0.33).powi(2)).sqrt() * 0.8;
+                color(shade.clamp(0.2, 0.75))
+            } else if (0.78..0.9).contains(&v) && (0.14..0.86).contains(&u) {
+                color(0.28)
+            } else {
+                [0, 0, 0, 0]
+            };
+            pixels.extend_from_slice(&px);
+        }
+    }
+
+    let mut out = Vec::new();
+    let mut encoder = png::Encoder::new(&mut out, size, size);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    encoder.write_header()?.write_image_data(&pixels)?;
+    Ok(out)
+}
+
+fn hsl(h: f32, s: f32, l: f32) -> [u8; 4] {
+    let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
+    let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
+    let m = l - c / 2.0;
+    let (r, g, b) = match h as u32 / 60 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    let to = |v: f32| ((v + m) * 255.0).round() as u8;
+    [to(r), to(g), to(b), 255]
 }

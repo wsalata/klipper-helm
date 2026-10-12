@@ -9,7 +9,7 @@ Na Raspberry Pi rysuje bezpośrednio przez KMS/DRM (bez X11/Wayland), na PC dzia
 - **Temp.**: wszystkie grzałki i czujniki, ustawianie temperatury klawiaturą numeryczną, presety
 - **Ruch**: przesuwanie osi z wyborem kroku, bazowanie, wyłączanie silników
 - **Filament**: ekstruzja i retrakcja, sterowanie wentylatorami
-- **Pliki**: lista G-code z metadanymi i startem wydruku
+- **Pliki**: lista G-code z miniaturkami, metadanymi i startem wydruku
 - **Makra**: wszystkie `gcode_macro` (bez prefiksu `_`), z potwierdzeniem
 - **Konsola**: historia G-code i klawiatura ekranowa (działa też fizyczna)
 - **System**: restart Klippera/firmware, reboot/wyłączenie komputera
@@ -41,6 +41,12 @@ Dopisz `klipper-helm` do `~/printer_data/moonraker.asvc`, żeby Moonraker mógł
 
 Skalowanie interfejsu na innym ekranie niż 800×480: `Environment=SLINT_SCALE_FACTOR=1.5` w pliku usługi.
 Obrót ekranu: `Environment=SLINT_KMS_ROTATION=180`.
+
+## Miniaturki
+
+Panel pokazuje miniaturki, które slicer zapisuje w pliku G-code, a Moonraker wyciąga do katalogu `.thumbs`.
+Trzeba je włączyć w slicerze w formacie PNG, np. w PrusaSlicer/OrcaSlicer: Printer Settings → G-code thumbnails
+`48x48/PNG, 300x300/PNG`. Mała trafia na listę plików, duża do okna pliku i na pulpit w trakcie druku.
 
 ## Konfiguracja
 

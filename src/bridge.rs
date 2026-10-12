@@ -1,10 +1,35 @@
 //! Przekazywanie danych z wątku sieciowego do UI (wątek główny Slinta).
 
-use crate::printer::Snapshot;
+use crate::printer::{FileRow, Snapshot};
+use crate::thumbs::{Pixels, Size};
 use crate::{AppWindow, Conn, ConsoleLine, FileDetails, FileEntry, Printer};
-use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel, Weak};
+use slint::{ComponentHandle, Image, Model, ModelRc, SharedString, VecModel, Weak};
+use std::cell::RefCell;
+use std::collections::HashMap;
 
 const CONSOLE_LIMIT: usize = 300;
+/// Duże miniaturki zajmują ~0,4 MB każda, trzymamy tylko kilka ostatnich
+const LARGE_LIMIT: usize = 6;
+
+/// Miniaturki według ścieżki pliku G-code. Tylko w wątku UI (`Image` nie jest Send).
+#[derive(Default)]
+struct ThumbCache {
+    small: HashMap<String, Image>,
+    large: HashMap<String, Image>,
+}
+
+thread_local! {
+    static THUMBS: RefCell<ThumbCache> = RefCell::default();
+}
+
+/// Najlepsza dostępna miniaturka do dużego widoku (mała jako zastępstwo).
+fn large_thumb(path: &str) -> Image {
+    THUMBS.with_borrow(|c| c.large.get(path).or_else(|| c.small.get(path)).cloned().unwrap_or_default())
+}
+
+fn small_thumb(path: &str) -> Image {
+    THUMBS.with_borrow(|c| c.small.get(path).cloned().unwrap_or_default())
+}
 
 /// Aktualizuje VecModel w miejscu, żeby nie przebudowywać całych list w UI.
 pub fn sync<T: Clone + PartialEq + 'static>(model: &ModelRc<T>, items: Vec<T>) {
@@ -30,7 +55,9 @@ pub fn snapshot(ui: &Weak<AppWindow>, s: Snapshot) {
         p.set_status_label(s.status_label.into());
         p.set_status_message(s.status_message.into());
         p.set_top_temps(s.top_temps.into());
+        let filename = s.job.filename.clone();
         p.set_job(s.job);
+        p.set_job_thumb(large_thumb(&filename));
         p.set_position(s.position);
         p.set_extruder_temp(s.extruder_temp);
         p.set_has_extruder(s.has_extruder);
@@ -65,12 +92,59 @@ pub fn macros(ui: &Weak<AppWindow>, macros: Vec<String>) {
     });
 }
 
-pub fn files(ui: &Weak<AppWindow>, files: Vec<FileEntry>) {
-    with_printer(ui, move |p| sync(&p.get_files(), files));
+pub fn files(ui: &Weak<AppWindow>, files: Vec<FileRow>) {
+    with_printer(ui, move |p| {
+        let entries = files
+            .into_iter()
+            .map(|f| FileEntry {
+                thumb: small_thumb(&f.path),
+                path: f.path.into(),
+                size: f.size.into(),
+                modified: f.modified.into(),
+            })
+            .collect();
+        sync(&p.get_files(), entries);
+    });
 }
 
 pub fn details(ui: &Weak<AppWindow>, details: FileDetails) {
-    with_printer(ui, move |p| p.set_details(details));
+    with_printer(ui, move |p| {
+        p.set_details_thumb(large_thumb(&details.path));
+        p.set_details(details);
+    });
+}
+
+/// Pobrana miniaturka: zapamiętuje ją i podmienia we wszystkich miejscach, gdzie widać ten plik.
+pub fn thumbnail(ui: &Weak<AppWindow>, path: String, size: Size, pixels: Pixels) {
+    with_printer(ui, move |p| {
+        let image = Image::from_rgba8(pixels);
+        THUMBS.with_borrow_mut(|c| match size {
+            Size::Small => {
+                c.small.insert(path.clone(), image.clone());
+            }
+            Size::Large => {
+                if c.large.len() >= LARGE_LIMIT {
+                    c.large.clear();
+                }
+                c.large.insert(path.clone(), image.clone());
+            }
+        });
+
+        if size == Size::Small {
+            let files = p.get_files();
+            if let Some(i) = files.iter().position(|f| f.path == path.as_str()) {
+                let mut row = files.row_data(i).unwrap_or_default();
+                row.thumb = image;
+                files.set_row_data(i, row);
+            }
+        }
+        if p.get_details().path == path.as_str() {
+            p.set_details_thumb(large_thumb(&path));
+        }
+        if p.get_job().filename == path.as_str() {
+            p.set_job_thumb(large_thumb(&path));
+        }
+    });
 }
 
 /// Dodaje linie konsoli (w kolejności chronologicznej); najnowsze są wyświetlane na górze.

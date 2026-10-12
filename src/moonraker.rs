@@ -2,6 +2,7 @@
 
 use crate::config::Config;
 use crate::printer::{self, Objects, PrinterModel};
+use crate::thumbs::{Size, Thumbs};
 use crate::{AppWindow, Conn, ConsoleLine, bridge};
 use anyhow::bail;
 use futures_util::{SinkExt, StreamExt};
@@ -16,6 +17,8 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async, tungsten
 const RETRY: Duration = Duration::from_secs(2);
 /// Moonraker wysyła notify_proc_stat_update co sekundę, więc cisza oznacza zerwane połączenie.
 const SILENCE_TIMEOUT: Duration = Duration::from_secs(15);
+/// Dla tylu najnowszych plików pobieramy miniaturki na listę
+const LIST_THUMBS: usize = 100;
 
 pub enum Command {
     Gcode(String),
@@ -50,6 +53,8 @@ enum Pending {
     FileList,
     FileMeta(String),
     JobMeta(String),
+    /// Metadane potrzebne tylko do miniaturki na liście plików
+    ListMeta(String),
 }
 
 enum Exit {
@@ -60,11 +65,12 @@ enum Exit {
 type Ws = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
 pub async fn run(cfg: Config, ui: Weak<AppWindow>, mut rx: UnboundedReceiver<Command>) {
+    let mut thumbs = Thumbs::new(&cfg.moonraker_url);
     loop {
         bridge::conn(&ui, Conn::Connecting, "Łączenie...", cfg.moonraker_url.clone());
         match connect_async(cfg.moonraker_url.as_str()).await {
             Ok((ws, _)) => {
-                let mut session = Session::new(ws, &cfg, ui.clone());
+                let mut session = Session::new(ws, &cfg, ui.clone(), &mut thumbs);
                 match session.run(&mut rx).await {
                     Ok(Exit::Quit) => return,
                     Ok(Exit::Lost) => eprintln!("Moonraker: połączenie zamknięte"),
@@ -96,6 +102,7 @@ pub async fn run(cfg: Config, ui: Weak<AppWindow>, mut rx: UnboundedReceiver<Com
 struct Session<'a> {
     ws: Ws,
     cfg: &'a Config,
+    thumbs: &'a mut Thumbs,
     ui: Weak<AppWindow>,
     next_id: u64,
     pending: HashMap<u64, Pending>,
@@ -106,10 +113,11 @@ struct Session<'a> {
 }
 
 impl<'a> Session<'a> {
-    fn new(ws: Ws, cfg: &'a Config, ui: Weak<AppWindow>) -> Self {
+    fn new(ws: Ws, cfg: &'a Config, ui: Weak<AppWindow>, thumbs: &'a mut Thumbs) -> Self {
         Self {
             ws,
             cfg,
+            thumbs,
             ui,
             next_id: 1,
             pending: HashMap::new(),
@@ -283,9 +291,27 @@ impl<'a> Session<'a> {
                     .collect();
                 bridge::console(&self.ui, lines);
             }
-            Pending::FileList => bridge::files(&self.ui, printer::file_list(result)),
-            Pending::FileMeta(path) => bridge::details(&self.ui, printer::file_details(&path, result)),
+            Pending::FileList => {
+                let files = printer::file_list(result);
+                let missing: Vec<String> = files
+                    .iter()
+                    .take(LIST_THUMBS)
+                    .filter(|f| !self.thumbs.known(&f.path, &f.stamp))
+                    .map(|f| f.path.clone())
+                    .collect();
+                bridge::files(&self.ui, files);
+                for path in missing {
+                    let params = json!({ "filename": path });
+                    self.call("server.files.metadata", params, Pending::ListMeta(path)).await?;
+                }
+            }
+            Pending::ListMeta(path) => self.fetch_thumb(&path, result, Size::Small),
+            Pending::FileMeta(path) => {
+                bridge::details(&self.ui, printer::file_details(&path, result));
+                self.fetch_thumb(&path, result, Size::Large);
+            }
             Pending::JobMeta(path) => {
+                self.fetch_thumb(&path, result, Size::Large);
                 self.model.job_meta = Some((path, result.clone()));
                 self.push_state();
             }
@@ -312,6 +338,7 @@ impl<'a> Session<'a> {
                 bridge::details(&self.ui, printer::file_details(&path, &Value::Null));
             }
             Pending::JobMeta(path) => self.model.job_meta = Some((path, Value::Null)),
+            Pending::ListMeta(_) => {}
             Pending::Ignore | Pending::GcodeStore | Pending::FileList => {
                 eprintln!("Moonraker: {msg}");
             }
@@ -373,6 +400,12 @@ impl<'a> Session<'a> {
         }
         self.job_meta_requested = file.clone();
         self.call("server.files.metadata", json!({ "filename": file }), Pending::JobMeta(file)).await
+    }
+
+    fn fetch_thumb(&mut self, path: &str, meta: &Value, size: Size) {
+        let ui = self.ui.clone();
+        let file = path.to_string();
+        self.thumbs.fetch(path, meta, size, move |pixels| bridge::thumbnail(&ui, file, size, pixels));
     }
 
     fn push_state(&self) {

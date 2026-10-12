@@ -2,9 +2,10 @@ mod bridge;
 mod config;
 mod moonraker;
 mod printer;
+mod thumbs;
 
 use moonraker::Command;
-use slint::{ComponentHandle, ModelRc, SharedString, Timer, TimerMode, VecModel};
+use slint::{ComponentHandle, Model, ModelRc, SharedString, Timer, TimerMode, VecModel};
 use std::time::Duration;
 use tokio::sync::mpsc::{self, UnboundedSender};
 
@@ -124,7 +125,8 @@ fn wire_actions(ui: &AppWindow, tx: &UnboundedSender<Command>) {
 }
 
 /// Tylko w buildzie debug: przechodzi przez wszystkie ekrany, zapisuje każdy
-/// jako `page-N.ppm` w podanym katalogu i zamyka aplikację.
+/// jako `page-N.ppm` w podanym katalogu i zamyka aplikację. Ostatni zrzut
+/// (`page-8.ppm`) pokazuje okno pierwszego pliku z listy.
 #[cfg(debug_assertions)]
 fn snapshot_pages(ui: &AppWindow, dir: String) -> Timer {
     const PAGES: i32 = 8;
@@ -147,12 +149,20 @@ fn snapshot_pages(ui: &AppWindow, dir: String) -> Timer {
                 }
                 Err(e) => eprintln!("Zrzut ekranu: {e}"),
             }
-            if page + 1 == PAGES {
+            if page == PAGES {
                 let _ = slint::quit_event_loop();
                 return;
             }
         }
-        ui.global::<Nav>().set_page(step);
+        if step < PAGES {
+            ui.global::<Nav>().set_page(step);
+        } else if let Some(file) = ui.global::<Printer>().get_files().row_data(0) {
+            ui.global::<Nav>().set_page(4);
+            let overlay = ui.global::<Overlay>();
+            overlay.set_file_path(file.path.clone());
+            overlay.set_file_open(true);
+            ui.global::<Actions>().invoke_file_details(file.path);
+        }
         step += 1;
     });
     timer

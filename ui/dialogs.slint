@@ -1,6 +1,6 @@
 import { Theme } from "theme.slint";
 import { Printer, Actions, Overlay, Nav, Conn } from "state.slint";
-import { Btn, BtnKind, Card, Caption, InfoRow } from "widgets.slint";
+import { Btn, BtnKind, Card, Caption, InfoRow, Thumb } from "widgets.slint";
 
 // Przyciemnione tło blokujące dotyk pod oknem.
 component Scrim inherits Rectangle {
@@ -130,7 +130,7 @@ export component FileDialog inherits Scrim {
     property <bool> loaded: Printer.details.path == Overlay.file-path;
 
     Dialog {
-        width: min(root.width - 32px, 520px);
+        width: min(root.width - 32px, 620px);
         height: min(root.height - 16px, 330px);
         VerticalLayout {
             padding: 16px;
@@ -142,11 +142,22 @@ export component FileDialog inherits Scrim {
                 font-weight: 700;
                 wrap: word-wrap;
             }
-            InfoRow { label: "Szacowany czas"; value: root.loaded ? Printer.details.estimated : "..."; }
-            InfoRow { label: "Filament"; value: root.loaded ? Printer.details.filament : "..."; }
-            InfoRow { label: "Wysokość warstwy"; value: root.loaded ? Printer.details.layer-height : "..."; }
-            InfoRow { label: "Slicer"; value: root.loaded ? Printer.details.slicer : "..."; }
-            Rectangle { vertical-stretch: 1; }
+            HorizontalLayout {
+                spacing: 16px;
+                vertical-stretch: 1;
+                if root.loaded && Printer.details-thumb.width > 0: Thumb {
+                    source: Printer.details-thumb;
+                    width: 170px;
+                }
+                VerticalLayout {
+                    spacing: 10px;
+                    InfoRow { label: "Szacowany czas"; value: root.loaded ? Printer.details.estimated : "..."; }
+                    InfoRow { label: "Filament"; value: root.loaded ? Printer.details.filament : "..."; }
+                    InfoRow { label: "Wysokość warstwy"; value: root.loaded ? Printer.details.layer-height : "..."; }
+                    InfoRow { label: "Slicer"; value: root.loaded ? Printer.details.slicer : "..."; }
+                    Rectangle { vertical-stretch: 1; }
+                }
+            }
             HorizontalLayout {
                 spacing: Theme.gap;
                 Btn { text: "Zamknij"; kind: BtnKind.ghost; clicked => { Overlay.file-open = false; } }

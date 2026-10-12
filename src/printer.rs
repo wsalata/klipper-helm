@@ -1,7 +1,7 @@
 //! Stan drukarki zbudowany z delt wysyłanych przez Moonrakera
 //! i jego przekształcenie na struktury wyświetlane w UI.
 
-use crate::{Conn, Fan, FileDetails, FileEntry, Heater, PrintJob, Position};
+use crate::{Conn, Fan, FileDetails, Heater, PrintJob, Position};
 use serde_json::{Value, json};
 
 /// Obiekty Klippera wykryte przez `printer.objects.list`.
@@ -342,21 +342,32 @@ fn fmt_time(epoch: f64) -> String {
         .unwrap_or_default()
 }
 
+/// Wiersz listy plików. Bez obrazka, bo `slint::Image` nie może opuścić wątku UI.
+pub struct FileRow {
+    pub path: String,
+    pub size: String,
+    pub modified: String,
+    /// Surowy czas modyfikacji, do rozpoznania nowej wersji pliku
+    pub stamp: Value,
+}
+
 /// Lista plików z `server.files.list`, najnowsze najpierw.
-pub fn file_list(result: &Value) -> Vec<FileEntry> {
-    let mut files: Vec<(f64, FileEntry)> = result
+pub fn file_list(result: &Value) -> Vec<FileRow> {
+    let mut files: Vec<(f64, FileRow)> = result
         .as_array()
         .into_iter()
         .flatten()
         .filter_map(|f| {
             let path = f.get("path").or_else(|| f.get("filename"))?.as_str()?;
-            let modified = f.get("modified").and_then(Value::as_f64).unwrap_or(0.0);
+            let stamp = f.get("modified").cloned().unwrap_or(Value::Null);
+            let modified = stamp.as_f64().unwrap_or(0.0);
             Some((
                 modified,
-                FileEntry {
+                FileRow {
                     path: path.into(),
-                    size: fmt_size(f.get("size").and_then(Value::as_f64).unwrap_or(0.0)).into(),
-                    modified: fmt_time(modified).into(),
+                    size: fmt_size(f.get("size").and_then(Value::as_f64).unwrap_or(0.0)),
+                    modified: fmt_time(modified),
+                    stamp,
                 },
             ))
         })
