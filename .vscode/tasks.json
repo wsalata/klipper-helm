@@ -1,0 +1,65 @@
+{
+    // Ctrl+Shift+P → "Tasks: Run Task" albo Ctrl+Shift+B (domyślny build)
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Mock Moonraker",
+            "detail": "Udawany Moonraker na 127.0.0.1:7125 (działa w tle)",
+            "type": "shell",
+            "command": "cargo run --example mock_moonraker",
+            "isBackground": true,
+            // Zadanie uznajemy za gotowe, gdy mock wypisze adres (potrzebne dla dependsOn/preLaunchTask)
+            "problemMatcher": {
+                "owner": "mock-moonraker",
+                "pattern": { "regexp": "^__never_matches__$" },
+                "background": {
+                    "activesBegin": true,
+                    "beginsPattern": "Compiling|Finished|Running",
+                    "endsPattern": "Mock Moonraker na ws://"
+                }
+            },
+            "presentation": { "panel": "dedicated", "reveal": "silent" }
+        },
+        {
+            "label": "Panel (mock)",
+            "detail": "Uruchamia mock i panel podłączony do niego",
+            "type": "shell",
+            "command": "cargo run",
+            "options": { "env": { "MOONRAKER_URL": "ws://127.0.0.1:7125/websocket" } },
+            "dependsOn": "Mock Moonraker",
+            "problemMatcher": ["$rustc"],
+            "presentation": { "panel": "dedicated" }
+        },
+        {
+            "label": "Panel (drukarka)",
+            "detail": "Panel podłączony do prawdziwego Moonrakera",
+            "type": "shell",
+            "command": "cargo run",
+            "options": { "env": { "MOONRAKER_URL": "${input:moonrakerUrl}" } },
+            "problemMatcher": ["$rustc"],
+            "presentation": { "panel": "dedicated" }
+        },
+        {
+            "label": "cargo build",
+            "type": "shell",
+            "command": "cargo build",
+            "problemMatcher": ["$rustc"],
+            "group": { "kind": "build", "isDefault": true }
+        },
+        {
+            "label": "cargo build --release",
+            "type": "shell",
+            "command": "cargo build --release",
+            "problemMatcher": ["$rustc"],
+            "group": "build"
+        }
+    ],
+    "inputs": [
+        {
+            "id": "moonrakerUrl",
+            "type": "promptString",
+            "description": "Adres WebSocket Moonrakera",
+            "default": "ws://192.168.1.100:7125/websocket"
+        }
+    ]
+}

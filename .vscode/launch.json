@@ -1,0 +1,47 @@
+{
+    // Debugowanie (F5) wymaga rozszerzenia CodeLLDB: vadimcorp.vscode-lldb
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Panel (mock)",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": ["build", "--bin=klipper-helm", "--package=klipper-helm"],
+                "filter": { "name": "klipper-helm", "kind": "bin" }
+            },
+            "env": { "MOONRAKER_URL": "ws://127.0.0.1:7125/websocket" },
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "Mock Moonraker"
+        },
+        {
+            "name": "Panel (drukarka)",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": ["build", "--bin=klipper-helm", "--package=klipper-helm"],
+                "filter": { "name": "klipper-helm", "kind": "bin" }
+            },
+            "env": { "MOONRAKER_URL": "${input:moonrakerUrl}" },
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Mock Moonraker",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": ["build", "--example=mock_moonraker", "--package=klipper-helm"],
+                "filter": { "name": "mock_moonraker", "kind": "example" }
+            },
+            "cwd": "${workspaceFolder}"
+        }
+    ],
+    "inputs": [
+        {
+            "id": "moonrakerUrl",
+            "type": "promptString",
+            "description": "Adres WebSocket Moonrakera",
+            "default": "ws://192.168.1.100:7125/websocket"
+        }
+    ]
+}
