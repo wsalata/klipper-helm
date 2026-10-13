@@ -37,8 +37,13 @@ if test -z "${bootpart}"; then
 fi
 saveenv
 
-# loglevel=5 instead of quiet: quiet would also hide the boot logo
-setenv bootargs "console=ttySAC2,115200n8 root=PARTUUID=4b484c4d-0${bootpart} rauc.slot=${raucslot} rootwait ro loglevel=5 fbcon=logo-pos:center net.ifnames=0 vt.global_cursor_default=0"
+# The rest of the kernel command line comes from the slot itself (/boot/bootargs.env),
+# so system updates can change it; this script on the boot partition is never updated.
+setenv bootargs_extra
+if load ${devtype} ${devnum}:${bootpart} ${scriptaddr} /boot/bootargs.env; then
+	env import -t ${scriptaddr} ${filesize} bootargs_extra
+fi
+setenv bootargs "console=ttySAC2,115200n8 root=PARTUUID=4b484c4d-0${bootpart} rauc.slot=${raucslot} rootwait ro ${bootargs_extra}"
 echo "Booting slot ${raucslot} (partition ${bootpart})"
 load ${devtype} ${devnum}:${bootpart} ${kernel_addr_r} /boot/zImage
 load ${devtype} ${devnum}:${bootpart} ${fdt_addr_r} /boot/exynos5422-odroidxu4.dtb

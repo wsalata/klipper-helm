@@ -12,8 +12,10 @@ Target: **Odroid XU4** (Exynos 5422) with an HDMI screen and a USB touch screen.
   [A patch](board/odroidxu4/patches/linux) adds Hardkernel's HDMI PHY settings and picks the nearest
   one within 2%: mainline knows too few, so small screens (800x480) otherwise stay dark.
 - Mainline U-Boot (`odroid-xu3`, which covers the XU4) behind Hardkernel's signed BL1/BL2/TZSW blobs
-  (package [odroidxu4-blobs](package/odroidxu4-blobs)), booting through
-  [extlinux.conf](board/odroidxu4/extlinux.conf).
+  (package [odroidxu4-blobs](package/odroidxu4-blobs)). Its boot script
+  ([boot.cmd](board/odroidxu4/boot.cmd)) picks the A or B system and reads the rest of the kernel
+  command line from that system's `/boot/bootargs.env`
+  ([in the overlay](board/odroidxu4/rootfs-overlay/boot/bootargs.env)), so updates can change it.
 - BusyBox init, eudev, `ntpd` for the clock, time zone Europe/Warsaw.
 - Networking: `dhcpcd` on every interface, `wpa_supplicant` for USB Wi-Fi adapters (drivers as modules
   for Realtek RTL8188/8192/8723/8821/8822, MediaTek MT7601U/MT7921AU, Ralink RT2870/RT3070/RT5370 and
@@ -27,7 +29,8 @@ Target: **Odroid XU4** (Exynos 5422) with an HDMI screen and a USB touch screen.
   Klipper Helm logo from the moment HDMI starts (kernel boot logo, centred) until the panel takes over
   with the same logo while it connects. The logo image is
   [boot-logo.png](board/odroidxu4/boot-logo.png), rendered from `ui/icons/logo.svg` and the panel's
-  fonts by [make-boot-logo.sh](board/odroidxu4/make-boot-logo.sh); `quiet` is not used because it
+  fonts by [make-boot-logo.sh](board/odroidxu4/make-boot-logo.sh). One logo (`fbcon=...,logo-count:1`;
+  by default the kernel draws one per CPU core); `quiet` is not used because it
   also hides the logo (`loglevel=5` keeps the serial console short instead).
 - `/etc/inittab` starts [klipper-helm-start](board/odroidxu4/rootfs-overlay/usr/bin/klipper-helm-start)
   and restarts it whenever the panel exits. Its output goes to `/data/logs/klipper-helm.log`
@@ -127,9 +130,10 @@ sudo mount -L data /mnt && ls /mnt/logs && sudo umount /mnt
 - Small HDMI screens are often powered by their USB touch cable: without it the screen stays dark
   and `drm.txt` lists only the fallback mode 640x480 (no EDID). A charge-only cable powers the screen
   but the touch controller does not appear in `input.txt`.
-- Screen dark although powered: add `drm.debug=0x4 console=tty1` to the `append` line in
-  `extlinux/extlinux.conf` on the boot partition. Boot messages then appear on the screen, and
-  `dmesg.txt` shows the screen's modes and `Could not find phy config` for any that were rejected.
+- Screen dark although powered: add `drm.debug=0x4 console=tty1` to `bootargs_extra` in
+  `/boot/bootargs.env` of the running system (on a Linux PC: mount the card's partition 2 for system A
+  or 3 for B). Boot messages then appear on the screen, and `dmesg.txt` shows the screen's modes and
+  `Could not find phy config` for any that were rejected.
 - `drm.txt` shows the mode but the panel does not appear: see `klipper-helm.log`.
 - A USB-serial adapter on the UART header (1.8 V levels) shows the boot log live; log in as `root`
   (no password).

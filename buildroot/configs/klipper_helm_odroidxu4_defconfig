@@ -86,10 +86,8 @@ BR2_TARGET_UBOOT_BOARD_DEFCONFIG="odroid-xu3"
 BR2_TARGET_UBOOT_NEEDS_DTC=y
 BR2_TARGET_UBOOT_NEEDS_OPENSSL=y
 BR2_TARGET_UBOOT_FORMAT_DTB_BIN=y
-# A/B slot selection (board/odroidxu4/boot.cmd), compiled to boot.scr
+# mkimage, for the A/B boot script (post-image.sh compiles board/odroidxu4/boot.cmd to boot.scr)
 BR2_PACKAGE_HOST_UBOOT_TOOLS=y
-BR2_PACKAGE_HOST_UBOOT_TOOLS_BOOT_SCRIPT=y
-BR2_PACKAGE_HOST_UBOOT_TOOLS_BOOT_SCRIPT_SOURCE="$(BR2_EXTERNAL_KLIPPER_HELM_PATH)/board/odroidxu4/boot.cmd"
 
 # Host tools for assembling sdcard.img
 BR2_PACKAGE_HOST_DOSFSTOOLS=y

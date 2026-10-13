@@ -7,6 +7,9 @@ KEYS_DIR="${BOARD_DIR}/../../keys"
 GENIMAGE_TMP="${BUILD_DIR}/genimage.tmp"
 VERSION="$(cat "${TARGET_DIR}/etc/klipper-helm-release")"
 
+# A/B boot script; compiled here so every image has the current boot.cmd
+"${HOST_DIR}/bin/mkimage" -C none -A arm -T script -d "${BOARD_DIR}/boot.cmd" "${BINARIES_DIR}/boot.scr"
+
 # Hardkernel's bl1 is 256 bytes longer than its slot; their sd_fusing.sh simply
 # lets bl2 overwrite the tail, so trim it to fit (hardkernel/u-boot issue #45).
 truncate -s 15360 "${BINARIES_DIR}/bl1.bin.hardkernel"
