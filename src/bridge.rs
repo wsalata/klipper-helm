@@ -59,6 +59,7 @@ pub fn snapshot(ui: &Weak<AppWindow>, s: Snapshot) {
         p.set_job(s.job);
         p.set_job_thumb(large_thumb(&filename));
         p.set_position(s.position);
+        p.set_calibration(s.calibration);
         p.set_extruder_temp(s.extruder_temp);
         p.set_has_extruder(s.has_extruder);
         p.set_has_part_fan(s.part_fan.is_some());
@@ -176,6 +177,7 @@ pub fn reset(ui: &Weak<AppWindow>) {
         sync(&p.get_console(), Vec::new());
         p.set_job(Default::default());
         p.set_position(Default::default());
+        p.set_calibration(Default::default());
         p.set_details(Default::default());
         p.set_job_thumb(Default::default());
         p.set_details_thumb(Default::default());

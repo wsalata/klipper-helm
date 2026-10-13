@@ -30,6 +30,8 @@ pub enum Command {
     SetFan(String, f32),
     Jog(String, f32),
     Extrude(f32, f32),
+    /// Z offset calibration: "probe" or "endstop"
+    CalibrateZ(String),
     Pause,
     Resume,
     Cancel,
@@ -402,6 +404,13 @@ impl<'a> Session<'a> {
             }
             Command::Extrude(mm, speed) => {
                 return self.gcode(format!("M83\nG1 E{mm} F{:.0}", speed * 60.0)).await;
+            }
+            Command::CalibrateZ(method) => {
+                let (xy, z) = (self.cfg.xy_speed, self.cfg.z_speed);
+                return match self.model.calibrate_z_gcode(&method, xy, z) {
+                    Some(g) => self.gcode(g).await,
+                    None => Ok(()),
+                };
             }
             Command::Pause => action("printer.print.pause"),
             Command::Resume => action("printer.print.resume"),

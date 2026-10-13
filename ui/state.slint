@@ -100,6 +100,16 @@ export struct Position {
     homed-z: bool,
 }
 
+// Z offset calibration with Klipper's manual probe helper (paper test)
+export struct ZCalibration {
+    has-probe: bool,     // probe / BLTouch present: PROBE_CALIBRATE, otherwise Z_ENDSTOP_CALIBRATE
+    active: bool,        // waiting for TESTZ / ACCEPT / ABORT
+    z: string,           // current nozzle height, "" when unknown
+    lower: string,       // highest tested position that was too low, "" when none
+    upper: string,       // lowest tested position that was too high, "" when none
+    save-pending: bool,  // a result waits for SAVE_CONFIG
+}
+
 export global Printer {
     in property <Conn> conn: Conn.connecting;
     in property <Status> status: Status.connecting;
@@ -121,6 +131,7 @@ export global Printer {
     in property <PrintJob> job;
     in property <image> job-thumb;
     in property <Position> position;
+    in property <ZCalibration> calibration;
     in property <float> extruder-temp;
     in property <bool> has-extruder;
     in property <[string]> macros;
@@ -240,6 +251,8 @@ export global Actions {
     callback set-fan(string, float);
     callback jog(string, float);
     callback extrude(float, float);
+    // "probe" or "endstop"
+    callback calibrate-z(string);
     callback pause();
     callback resume();
     callback cancel();

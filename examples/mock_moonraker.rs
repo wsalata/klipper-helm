@@ -45,6 +45,12 @@ struct Sim {
     state: &'static str,
     fan: f64,
     speed_factor: f64,
+    /// Manual probe helper (PROBE_CALIBRATE / TESTZ / ACCEPT / ABORT)
+    probe_active: bool,
+    probe_z: f64,
+    probe_lower: Option<f64>,
+    probe_upper: Option<f64>,
+    save_pending: bool,
 }
 
 impl Sim {
@@ -88,6 +94,13 @@ impl Sim {
             },
             "idle_timeout": { "state": if self.state == "printing" { "Printing" } else { "Idle" } },
             "webhooks": { "state": "ready", "state_message": "Printer is ready" },
+            "manual_probe": {
+                "is_active": self.probe_active,
+                "z_position": self.probe_active.then_some(self.probe_z),
+                "z_position_lower": self.probe_lower,
+                "z_position_upper": self.probe_upper,
+            },
+            "configfile": { "save_config_pending": self.save_pending },
         })
     }
 }
@@ -100,6 +113,8 @@ async fn client(stream: TcpStream) -> anyhow::Result<()> {
     }
     let ws = accept_async(stream).await?;
     let (mut tx, mut rx) = ws.split();
+    // MOCK_PROBE=1: idle printer in the middle of a Z calibration
+    let probing = std::env::var_os("MOCK_PROBE").is_some();
     let mut sim = Sim {
         t: 0.0,
         ext_target: 210.0,
@@ -107,9 +122,14 @@ async fn client(stream: TcpStream) -> anyhow::Result<()> {
         bed_target: 60.0,
         bed: 25.0,
         progress: 0.37,
-        state: "printing",
+        state: if probing { "standby" } else { "printing" },
         fan: 1.0,
         speed_factor: 1.0,
+        probe_active: probing,
+        probe_z: 1.15,
+        probe_lower: probing.then_some(1.1),
+        probe_upper: probing.then_some(1.2),
+        save_pending: false,
     };
     let mut tick = tokio::time::interval(Duration::from_millis(500));
 
@@ -135,7 +155,7 @@ async fn client(stream: TcpStream) -> anyhow::Result<()> {
                     "printer.objects.list" => json!({ "objects": [
                         "webhooks", "configfile", "extruder", "heater_bed", "temperature_sensor raspberry_pi",
                         "fan", "heater_fan hotend_fan", "print_stats", "virtual_sdcard", "display_status",
-                        "toolhead", "gcode_move", "idle_timeout",
+                        "toolhead", "gcode_move", "idle_timeout", "probe", "bltouch", "manual_probe",
                         "gcode_macro PRINT_START", "gcode_macro PRINT_END", "gcode_macro LOAD_FILAMENT",
                         "gcode_macro UNLOAD_FILAMENT", "gcode_macro _HELPER", "gcode_macro BED_MESH_CALIBRATE_FAST",
                         "gcode_macro PARK", "gcode_macro M600",
@@ -172,6 +192,19 @@ async fn client(stream: TcpStream) -> anyhow::Result<()> {
                                 Some("M220") => {
                                     sim.speed_factor = words.next().and_then(|w| w.strip_prefix('S')).and_then(|v| v.parse::<f64>().ok()).unwrap_or(100.0) / 100.0;
                                 }
+                                Some("PROBE_CALIBRATE") => {
+                                    sim.probe_active = true;
+                                    sim.probe_z = 5.0;
+                                    (sim.probe_lower, sim.probe_upper) = (None, None);
+                                }
+                                Some("TESTZ") if sim.probe_active => {
+                                    let dz: f64 = words.next().and_then(|w| w.strip_prefix("Z=")).and_then(|v| v.parse().ok()).unwrap_or(0.0);
+                                    if dz < 0.0 { sim.probe_upper = Some(sim.probe_z) } else { sim.probe_lower = Some(sim.probe_z) }
+                                    sim.probe_z += dz;
+                                }
+                                Some("ACCEPT") if sim.probe_active => { sim.probe_active = false; sim.save_pending = true; }
+                                Some("ABORT") => sim.probe_active = false,
+                                Some("SAVE_CONFIG") => sim.save_pending = false,
                                 Some("FAIL") => {
                                     let err = json!({ "jsonrpc": "2.0", "id": id, "error": { "code": 400, "message": "Unknown command:\"FAIL\"" } });
                                     tx.send(Message::text(err.to_string())).await?;

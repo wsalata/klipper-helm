@@ -20,6 +20,7 @@ import { SystemPage } from "pages/system.slint";
 import { SettingsPage } from "pages/settings.slint";
 import { NetworkPage } from "pages/network.slint";
 import { UpdatePage } from "pages/update.slint";
+import { ZCalibratePage } from "pages/zcalibrate.slint";
 
 export { Printer, Actions, Overlay, Nav, Settings, Messages, Network, Update }
 
@@ -35,6 +36,7 @@ component Header inherits HorizontalLayout {
         if (page == 8) { return @tr("Panel settings"); }
         if (page == 9) { return @tr("Network"); }
         if (page == 10) { return @tr("Updates"); }
+        if (page == 11) { return @tr("Z calibration"); }
         return "";
     }
 
@@ -131,7 +133,7 @@ export component AppWindow inherits Window {
     default-font-size: Theme.font-m;
 
     // Console, System and Settings also work when Klipper is not ready
-    property <bool> blocked: Printer.conn != Conn.ready && Nav.page < 6;
+    property <bool> blocked: Printer.conn != Conn.ready && (Nav.page < 6 || Nav.page == 11);
 
     VerticalLayout {
         Header {}
@@ -153,6 +155,7 @@ export component AppWindow inherits Window {
             if Nav.page == 8: SettingsPage { width: 100%; height: 100%; }
             if Nav.page == 9: NetworkPage { width: 100%; height: 100%; }
             if Nav.page == 10: UpdatePage { width: 100%; height: 100%; }
+            if !root.blocked && Nav.page == 11: ZCalibratePage { width: 100%; height: 100%; }
           }
         }
     }

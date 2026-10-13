@@ -495,3 +495,45 @@ msgstr "Zwiększ: {}"
 
 msgid "No releases found. The repository may have no releases yet, or it is private and needs a token (update_token in the config file)."
 msgstr "Nie znaleziono wydań. Repozytorium może nie mieć jeszcze wydań albo jest prywatne i wymaga tokenu (update_token w pliku konfiguracji)."
+
+msgid "Z calibration"
+msgstr "Kalibracja Z"
+
+msgid "Probe offset (e.g. BLTouch)"
+msgstr "Offset sondy (np. BLTouch)"
+
+msgid "Z endstop position"
+msgstr "Pozycja krańcówki Z"
+
+msgid "Too low: {} mm · too high: {} mm"
+msgstr "Za nisko: {} mm · za wysoko: {} mm"
+
+msgid "Lower the nozzle until a sheet of paper under it slides with slight friction, then press Accept."
+msgstr "Opuszczaj dyszę, aż kartka papieru pod nią będzie się przesuwać z lekkim oporem, potem naciśnij Zatwierdź."
+
+msgid "Heat the nozzle and the bed to printing temperature first. The printer homes if needed, moves to the middle of the bed and starts the paper test."
+msgstr "Najpierw nagrzej dyszę i stół do temperatury druku. Drukarka w razie potrzeby wykona bazowanie, przejedzie na środek stołu i rozpocznie test z kartką."
+
+msgid "The new value is ready. Saving it writes the printer configuration and restarts Klipper."
+msgstr "Nowa wartość jest gotowa. Zapisanie jej zmieni konfigurację drukarki i zrestartuje Klippera."
+
+msgid "Save and restart"
+msgstr "Zapisz i zrestartuj"
+
+msgid "Save the configuration and restart Klipper?"
+msgstr "Zapisać konfigurację i zrestartować Klippera?"
+
+msgid "Start calibration"
+msgstr "Rozpocznij kalibrację"
+
+msgid "Raise nozzle"
+msgstr "Podnieś dyszę"
+
+msgid "Lower nozzle"
+msgstr "Opuść dyszę"
+
+msgid "Abort"
+msgstr "Przerwij"
+
+msgid "Accept"
+msgstr "Zatwierdź"

@@ -95,6 +95,7 @@ fn wire_actions(ui: &AppWindow, tx: &UnboundedSender<Command>) {
     on!(on_set_fan, |f, s| Command::SetFan(f.into(), s));
     on!(on_jog, |axis, dist| Command::Jog(axis.into(), dist));
     on!(on_extrude, |mm, speed| Command::Extrude(mm, speed));
+    on!(on_calibrate_z, |method| Command::CalibrateZ(method.into()));
     on!(on_pause, || Command::Pause);
     on!(on_resume, || Command::Resume);
     on!(on_cancel, || Command::Cancel);
@@ -150,7 +151,7 @@ fn snapshot_pages(ui: &AppWindow, dir: String) -> Timer {
     use slint::Model;
     type Step = Box<dyn Fn(&AppWindow)>;
     let page = |n: i32| -> Step { Box::new(move |ui| ui.global::<Nav>().set_page(n)) };
-    let mut steps: Vec<Step> = (0..8).map(page).collect();
+    let mut steps: Vec<Step> = (0..8).chain([11]).map(page).collect();
     steps.push(Box::new(|ui| {
         if let Some(file) = ui.global::<Printer>().get_files().row_data(0) {
             ui.global::<Nav>().set_page(4);

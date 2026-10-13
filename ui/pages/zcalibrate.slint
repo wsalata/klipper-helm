@@ -1,0 +1,103 @@
+import { Theme } from "../theme.slint";
+import { Printer, Actions, Overlay, ZCalibration } from "../state.slint";
+import { Btn, BtnKind, Card, Caption, Segmented } from "../widgets.slint";
+
+// Z offset calibration as in KlipperScreen: Klipper's manual probe helper (paper test),
+// started with PROBE_CALIBRATE (probe, BLTouch) or Z_ENDSTOP_CALIBRATE.
+export component ZCalibratePage inherits Rectangle {
+    property <ZCalibration> cal: Printer.calibration;
+    property <[string]> steps: ["0.01", "0.05", "0.1", "0.5", "1"];
+    property <int> step-index: 1;
+    property <string> step: root.steps[root.step-index];
+
+    HorizontalLayout {
+        padding: Theme.gap;
+        spacing: Theme.gap;
+
+        Card {
+            horizontal-stretch: 1;
+            VerticalLayout {
+                padding: 12px;
+                spacing: 10px;
+                Caption {
+                    text: root.cal.has-probe ? @tr("Probe offset (e.g. BLTouch)") : @tr("Z endstop position");
+                }
+                if root.cal.active: Text {
+                    text: root.cal.z == "" ? "-" : root.cal.z + " mm";
+                    color: Theme.text;
+                    font-size: 56px;
+                    font-weight: 700;
+                    horizontal-alignment: center;
+                }
+                if root.cal.active && (root.cal.lower != "" || root.cal.upper != ""): Text {
+                    text: @tr("Too low: {} mm · too high: {} mm",
+                        root.cal.lower == "" ? "-" : root.cal.lower,
+                        root.cal.upper == "" ? "-" : root.cal.upper);
+                    color: Theme.text-dim;
+                    font-size: Theme.font-s;
+                    horizontal-alignment: center;
+                    wrap: word-wrap;
+                }
+                Text {
+                    text: root.cal.active
+                        ? @tr("Lower the nozzle until a sheet of paper under it slides with slight friction, then press Accept.")
+                        : @tr("Heat the nozzle and the bed to printing temperature first. The printer homes if needed, moves to the middle of the bed and starts the paper test.");
+                    color: Theme.text-dim;
+                    font-size: Theme.font-s;
+                    wrap: word-wrap;
+                }
+                Rectangle { vertical-stretch: 1; }
+                if root.cal.save-pending && !root.cal.active: Text {
+                    text: @tr("The new value is ready. Saving it writes the printer configuration and restarts Klipper.");
+                    color: Theme.warn;
+                    font-size: Theme.font-s;
+                    wrap: word-wrap;
+                }
+                if root.cal.save-pending && !root.cal.active: Btn {
+                    text: @tr("Save and restart");
+                    kind: BtnKind.accent;
+                    clicked => { Overlay.ask(@tr("Save the configuration and restart Klipper?"), "gcode", "SAVE_CONFIG"); }
+                }
+            }
+        }
+
+        Card {
+            width: 320px;
+            VerticalLayout {
+                padding: 12px;
+                spacing: Theme.gap;
+
+                if !root.cal.active: Btn {
+                    text: @tr("Start calibration");
+                    kind: BtnKind.accent;
+                    enabled: !Printer.printing;
+                    clicked => { Actions.calibrate-z(root.cal.has-probe ? "probe" : "endstop"); }
+                }
+                if !root.cal.active: Rectangle { vertical-stretch: 1; }
+
+                if root.cal.active: Caption { text: @tr("Step [mm]"); }
+                if root.cal.active: Segmented {
+                    items: root.steps;
+                    selected <=> root.step-index;
+                }
+                if root.cal.active: Btn {
+                    text: @tr("Raise nozzle");
+                    icon: @image-url("../icons/up.svg");
+                    vertical-stretch: 1;
+                    clicked => { Actions.gcode("TESTZ Z=" + root.step); }
+                }
+                if root.cal.active: Btn {
+                    text: @tr("Lower nozzle");
+                    icon: @image-url("../icons/down.svg");
+                    vertical-stretch: 1;
+                    clicked => { Actions.gcode("TESTZ Z=-" + root.step); }
+                }
+                if root.cal.active: HorizontalLayout {
+                    spacing: Theme.gap;
+                    Btn { text: @tr("Abort"); kind: BtnKind.ghost; clicked => { Actions.gcode("ABORT"); } }
+                    Btn { text: @tr("Accept"); kind: BtnKind.accent; clicked => { Actions.gcode("ACCEPT"); } }
+                }
+            }
+        }
+    }
+}

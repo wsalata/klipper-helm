@@ -2,7 +2,7 @@
 //! into the structures shown by the UI. Only codes and raw data go to the UI;
 //! translated labels are produced in Slint.
 
-use crate::{Conn, Fan, FileDetails, Heater, PrintJob, Position, Status};
+use crate::{Conn, Fan, FileDetails, Heater, PrintJob, Position, Status, ZCalibration};
 use serde_json::{Value, json};
 
 /// Klipper objects discovered via `printer.objects.list`.
@@ -12,6 +12,10 @@ pub struct Objects {
     pub sensors: Vec<String>,
     pub fans: Vec<String>,
     pub macros: Vec<String>,
+    /// A Z probe ([probe], [bltouch] and others register the "probe" object)
+    pub probe: bool,
+    /// Klipper's manual probe helper (TESTZ/ACCEPT/ABORT), used by Z calibration
+    pub manual_probe: bool,
 }
 
 impl Objects {
@@ -27,6 +31,8 @@ impl Objects {
                 "temperature_sensor" => o.sensors.push(name.into()),
                 "fan" | "fan_generic" | "heater_fan" | "controller_fan" => o.fans.push(name.into()),
                 "gcode_macro" if !rest.starts_with('_') => o.macros.push(rest.into()),
+                "probe" => o.probe = true,
+                "manual_probe" => o.manual_probe = true,
                 _ => {}
             }
         }
@@ -55,6 +61,11 @@ impl Objects {
         {
             objects.insert(name.into(), Value::Null);
         }
+        if self.manual_probe {
+            objects.insert("manual_probe".into(), Value::Null);
+        }
+        // Only this field: the whole configfile object holds the full printer config
+        objects.insert("configfile".into(), json!(["save_config_pending"]));
         json!({ "objects": objects })
     }
 
@@ -146,6 +157,7 @@ pub struct Snapshot {
     pub has_extruder: bool,
     /// Speed of the part cooling fan ("fan"), if the printer has one
     pub part_fan: Option<f32>,
+    pub calibration: ZCalibration,
 }
 
 #[derive(Default)]
@@ -281,6 +293,51 @@ impl PrinterModel {
         Some(format!("{current:.0} / {total:.0}"))
     }
 
+    fn calibration(&self) -> ZCalibration {
+        let z = |field: &str| {
+            self.f(&format!("/manual_probe/{field}")).map_or_else(String::new, |v| format!("{v:.3}"))
+        };
+        ZCalibration {
+            has_probe: self.objects.probe,
+            active: self.status.pointer("/manual_probe/is_active").and_then(Value::as_bool).unwrap_or(false),
+            z: z("z_position").into(),
+            lower: z("z_position_lower").into(),
+            upper: z("z_position_upper").into(),
+            save_pending: self
+                .status
+                .pointer("/configfile/save_config_pending")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+        }
+    }
+
+    /// Starts Z calibration like KlipperScreen: homes if needed, moves the nozzle over the
+    /// middle of the bed and runs Klipper's calibration helper, which then waits for
+    /// TESTZ/ACCEPT/ABORT. `method` is "probe" (PROBE_CALIBRATE) or "endstop".
+    pub fn calibrate_z_gcode(&self, method: &str, xy_speed: f32, z_speed: f32) -> Option<String> {
+        let command = match method {
+            "probe" => "PROBE_CALIBRATE",
+            "endstop" => "Z_ENDSTOP_CALIBRATE",
+            _ => return None,
+        };
+        let mut script = String::new();
+        let homed = self.s("/toolhead/homed_axes");
+        if !(homed.contains('x') && homed.contains('y') && homed.contains('z')) {
+            script.push_str("G28\n");
+        }
+        let limit = |end: &str, i: usize| self.f(&format!("/toolhead/axis_{end}/{i}"));
+        let centre = |i: usize| Some((limit("minimum", i)? + limit("maximum", i)?) / 2.0);
+        if let (Some(x), Some(y)) = (centre(0), centre(1)) {
+            script.push_str(&format!(
+                "G90\nG1 Z10 F{:.0}\nG1 X{x:.1} Y{y:.1} F{:.0}\n",
+                z_speed * 60.0,
+                xy_speed * 60.0
+            ));
+        }
+        script.push_str(command);
+        Some(script)
+    }
+
     pub fn snapshot(&self) -> Snapshot {
         let heaters: Vec<Heater> = self.objects.heaters.iter().map(|h| self.heater(h, true)).collect();
         let sensors = self.objects.sensors.iter().map(|s| self.heater(s, false)).collect();
@@ -341,6 +398,7 @@ impl PrinterModel {
             fans,
             job: self.job(),
             position,
+            calibration: self.calibration(),
         }
     }
 }
@@ -430,6 +488,30 @@ mod tests {
         assert_eq!(heater_label("extruder1"), ("nozzle", 2, String::new()));
         assert_eq!(heater_label("heater_bed"), ("bed", 0, String::new()));
         assert_eq!(heater_label("heater_generic chamber_heater"), ("", 0, "Chamber heater".into()));
+    }
+
+    #[test]
+    fn calibrate_z() {
+        let mut m = PrinterModel::default();
+        m.status = json!({ "toolhead": {
+            "homed_axes": "",
+            "axis_minimum": [0.0, -5.0, 0.0, 0.0],
+            "axis_maximum": [220.0, 225.0, 250.0, 0.0],
+        }});
+        assert_eq!(
+            m.calibrate_z_gcode("probe", 100.0, 10.0).as_deref(),
+            Some("G28\nG90\nG1 Z10 F600\nG1 X110.0 Y110.0 F6000\nPROBE_CALIBRATE")
+        );
+        m.status["toolhead"]["homed_axes"] = json!("xyz");
+        assert!(m.calibrate_z_gcode("endstop", 100.0, 10.0).unwrap().starts_with("G90\n"));
+        assert_eq!(m.calibrate_z_gcode("other", 100.0, 10.0), None);
+    }
+
+    #[test]
+    fn probe_objects() {
+        let o = Objects::discover(&[json!("bltouch"), json!("probe"), json!("manual_probe")]);
+        assert!(o.probe && o.manual_probe);
+        assert_eq!(o.subscription()["objects"]["configfile"], json!(["save_config_pending"]));
     }
 
     #[test]

@@ -536,7 +536,8 @@ export component MenuSheet inherits Scrim {
                 for item in root.row1: MenuTile {
                     icon: item.icon;
                     text: item.text;
-                    active: Nav.page == item.page;
+                    // Z calibration (11) is a sub-page of Move
+                    active: Nav.page == item.page || (item.page == 2 && Nav.page == 11);
                     clicked => { root.go(item.page); }
                 }
             }
@@ -546,8 +547,8 @@ export component MenuSheet inherits Scrim {
                 for item in root.row2: MenuTile {
                     icon: item.icon;
                     text: item.text;
-                    // Settings (8) and Network (9) are sub-pages of System
-                    active: Nav.page == item.page || (item.page == 7 && Nav.page >= 8);
+                    // Settings (8), Network (9) and Updates (10) are sub-pages of System
+                    active: Nav.page == item.page || (item.page == 7 && Nav.page >= 8 && Nav.page <= 10);
                     clicked => { root.go(item.page); }
                 }
             }
