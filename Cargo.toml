@@ -1,7 +1,7 @@
 [package]
 name = "klipper-helm"
-version = "0.2.0"
-edition = "2026"
+version = "0.2.1"
+edition = "2024"
 description = "Touch screen panel for Klipper (a KlipperScreen replacement) in Rust + Slint"
 
 [dependencies]

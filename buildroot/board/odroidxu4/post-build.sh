@@ -9,9 +9,10 @@ BOARD_DIR="$(dirname "$0")"
 mkdir -p "${TARGET_DIR}/data"
 
 # Release version, compared with GitHub releases by the panel and written into the
-# update bundle. CI sets KLIPPER_HELM_VERSION from the tag; local builds are "-dev".
-if [ -n "${KLIPPER_HELM_VERSION}" ]; then
-	version="${KLIPPER_HELM_VERSION#v}"
+# update bundle. CI sets KLIPPER_HELM_RELEASE_VERSION from the tag; local builds are "-dev".
+# (Not KLIPPER_HELM_VERSION: that is the Buildroot package version, "local".)
+if [ -n "${KLIPPER_HELM_RELEASE_VERSION}" ]; then
+	version="${KLIPPER_HELM_RELEASE_VERSION#v}"
 else
 	version="$(sed -n 's/^version = "\(.*\)"/\1/p' "${BOARD_DIR}/../../../Cargo.toml" | head -n 1)-dev"
 fi
