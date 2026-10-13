@@ -1,0 +1,26 @@
+#!/bin/sh
+#
+# Points fw_printenv/fw_setenv (used by RAUC) at the U-Boot environment on the
+# device we booted from: SD card and eMMC show up under different names.
+#
+
+case "$1" in
+start)
+	partuuid=$(sed -n 's/.*root=PARTUUID=\([^ ]*\).*/\1/p' /proc/cmdline)
+	for i in 1 2 3 4 5; do
+		[ -e "/dev/disk/by-partuuid/$partuuid" ] && break
+		sleep 1
+	done
+	root=$(readlink -f "/dev/disk/by-partuuid/$partuuid")
+	# /dev/mmcblk1p2 -> /dev/mmcblk1
+	disk=${root%p[0-9]*}
+	# Same place as CONFIG_ENV_OFFSET / CONFIG_ENV_SIZE in U-Boot (odroid-xu3)
+	echo "$disk 0x310000 0x4000" > /tmp/fw_env.config
+	;;
+stop)
+	;;
+*)
+	echo "Usage: $0 {start|stop}"
+	exit 1
+	;;
+esac

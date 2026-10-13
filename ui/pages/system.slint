@@ -1,5 +1,5 @@
 import { Theme } from "../theme.slint";
-import { Printer, Overlay, Nav, Settings, Strings, Network } from "../state.slint";
+import { Printer, Overlay, Nav, Settings, Strings, Network, Update } from "../state.slint";
 import { Btn, BtnKind, Card, Caption, InfoRow } from "../widgets.slint";
 
 export component SystemPage inherits Rectangle {
@@ -40,6 +40,16 @@ export component SystemPage inherits Rectangle {
                         clicked => {
                             Network.load();
                             Nav.page = 9;
+                        }
+                    }
+                    Btn {
+                        text: @tr("Updates");
+                        icon: @image-url("../icons/refresh.svg");
+                        clicked => {
+                            if (Update.state == "idle") {
+                                Update.check();
+                            }
+                            Nav.page = 10;
                         }
                     }
                 }

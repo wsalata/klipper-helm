@@ -1,0 +1,88 @@
+import { Theme } from "../theme.slint";
+import { Update } from "../state.slint";
+import { Btn, BtnKind, Card, Caption, Bar, InfoRow } from "../widgets.slint";
+import { ScrollView } from "std-widgets.slint";
+
+export component UpdatePage inherits Rectangle {
+    property <bool> busy: Update.state == "checking" || Update.state == "downloading" || Update.state == "installing";
+
+    VerticalLayout {
+        padding: Theme.gap;
+        spacing: Theme.gap;
+
+        Card {
+            vertical-stretch: 1;
+            VerticalLayout {
+                padding: 16px;
+                spacing: 10px;
+
+                InfoRow { label: @tr("Installed version"); value: Update.current-version; }
+                if Update.slot != "": InfoRow { label: @tr("System partition"); value: Update.slot; }
+
+                Text {
+                    text: Update.state == "checking" ? @tr("Checking for updates...")
+                        : Update.state == "up-to-date" ? @tr("This is the latest version.")
+                        : Update.state == "no-release" ? @tr("No releases found. The repository may have no releases yet, or it is private and needs a token (update_token in the config file).")
+                        : Update.state == "available" ? @tr("Version {} is available.", Update.latest-version)
+                        : Update.state == "downloading" ? @tr("Downloading version {}...", Update.latest-version)
+                        : Update.state == "installing" ? @tr("Installing version {}... Do not switch off the device.", Update.latest-version)
+                        : Update.state == "installed" ? @tr("Version {} is installed. Restart to use it.", Update.latest-version)
+                        : Update.state == "error" ? @tr("Update failed: {}", Update.error)
+                        : "";
+                    color: Update.state == "error" ? Theme.danger-text
+                        : Update.state == "available" || Update.state == "installed" ? Theme.accent
+                        : Theme.text;
+                    font-size: Theme.font-m;
+                    wrap: word-wrap;
+                }
+
+                if Update.state == "downloading" || Update.state == "installing": Bar {
+                    height: 12px;
+                    value: Update.progress;
+                }
+
+                // Release notes of the new version
+                if Update.notes != "" && (Update.state == "available" || Update.state == "downloading"
+                        || Update.state == "installing" || Update.state == "installed"): ScrollView {
+                    vertical-stretch: 1;
+                    Text {
+                        text: Update.notes;
+                        color: Theme.text-dim;
+                        font-size: Theme.font-s;
+                        wrap: word-wrap;
+                    }
+                }
+                Rectangle { vertical-stretch: 1; }
+
+                Caption {
+                    text: Update.managed
+                        ? @tr("The update is installed next to the current system. If the new system does not start, the panel returns to the current one.")
+                        : @tr("Updates can only be installed on the panel's own system; here they are only checked.");
+                    wrap: word-wrap;
+                }
+
+                HorizontalLayout {
+                    spacing: Theme.gap;
+                    alignment: end;
+                    Btn {
+                        text: @tr("Check for updates");
+                        icon: @image-url("../icons/refresh.svg");
+                        enabled: !root.busy && Update.state != "installed";
+                        clicked => { Update.check(); }
+                    }
+                    if Update.state == "available": Btn {
+                        text: @tr("Download and install");
+                        kind: BtnKind.accent;
+                        enabled: Update.managed;
+                        clicked => { Update.install(); }
+                    }
+                    if Update.state == "installed": Btn {
+                        text: @tr("Restart");
+                        kind: BtnKind.accent;
+                        clicked => { Update.reboot(); }
+                    }
+                }
+            }
+        }
+    }
+}

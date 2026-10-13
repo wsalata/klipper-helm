@@ -18,6 +18,12 @@ pub struct Config {
     #[serde(rename = "preset")]
     pub presets: Vec<Preset>,
     pub network: NetworkConfig,
+    /// GitHub repository ("owner/name") whose releases provide system updates
+    pub update_repo: String,
+    /// GitHub token (read-only access to the repository's contents) for a private
+    /// repository; empty for a public one
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub update_token: String,
 }
 
 /// Ethernet address of the embedded image (Wi-Fi networks live in wpa_supplicant.conf).
@@ -90,6 +96,8 @@ impl Default for Config {
                 preset("ASA", 260.0, 100.0),
             ],
             network: NetworkConfig::default(),
+            update_repo: "wsalata/klipper-helm".into(),
+            update_token: String::new(),
         }
     }
 }

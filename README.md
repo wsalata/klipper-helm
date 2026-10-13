@@ -15,8 +15,9 @@ On a Raspberry Pi it draws directly through KMS/DRM (no X11/Wayland); on a PC it
 - **Files**: G-code list with thumbnails, metadata and print start
 - **Macros**: every `gcode_macro` (except those prefixed with `_`), with confirmation
 - **Console**: G-code history and an on-screen keyboard (a physical keyboard works too)
-- **System**: Klipper/firmware restart, host reboot/shutdown, panel settings and **Network**
-  (Ethernet DHCP or static address, Wi-Fi scanning and joining; changes only on the embedded image)
+- **System**: Klipper/firmware restart, host reboot/shutdown, panel settings, **Network**
+  (Ethernet DHCP or static address, Wi-Fi scanning and joining) and **Updates** (installs new GitHub
+  releases with automatic rollback); network changes and updates only on the embedded image
 
 The emergency stop is always in the top right corner: a red round button with three clockwise arrows,
 like the "twist to release" marking on a machine's emergency stop. It acts immediately, like Klipper's own.

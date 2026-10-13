@@ -6,7 +6,7 @@ import "fonts/SairaSemiCondensed-SemiBold.ttf";
 import "fonts/SairaSemiCondensed-Bold.ttf";
 
 import { Theme } from "theme.slint";
-import { Printer, Actions, Overlay, Nav, Conn, Settings, Strings, Messages, Network } from "state.slint";
+import { Printer, Actions, Overlay, Nav, Conn, Settings, Strings, Messages, Network, Update } from "state.slint";
 import { Btn, BtnKind } from "widgets.slint";
 import { NumpadDialog, ConfirmDialog, FileDialog, TextDialog, NotReadyPanel, MenuSheet, TuneSheet } from "dialogs.slint";
 import { DashboardPage } from "pages/dashboard.slint";
@@ -19,8 +19,9 @@ import { ConsolePage } from "pages/console.slint";
 import { SystemPage } from "pages/system.slint";
 import { SettingsPage } from "pages/settings.slint";
 import { NetworkPage } from "pages/network.slint";
+import { UpdatePage } from "pages/update.slint";
 
-export { Printer, Actions, Overlay, Nav, Settings, Messages, Network }
+export { Printer, Actions, Overlay, Nav, Settings, Messages, Network, Update }
 
 component Header inherits HorizontalLayout {
     pure function page-title(page: int) -> string {
@@ -33,6 +34,7 @@ component Header inherits HorizontalLayout {
         if (page == 7) { return @tr("System"); }
         if (page == 8) { return @tr("Panel settings"); }
         if (page == 9) { return @tr("Network"); }
+        if (page == 10) { return @tr("Updates"); }
         return "";
     }
 
@@ -150,6 +152,7 @@ export component AppWindow inherits Window {
             if Nav.page == 7: SystemPage { width: 100%; height: 100%; }
             if Nav.page == 8: SettingsPage { width: 100%; height: 100%; }
             if Nav.page == 9: NetworkPage { width: 100%; height: 100%; }
+            if Nav.page == 10: UpdatePage { width: 100%; height: 100%; }
           }
         }
     }

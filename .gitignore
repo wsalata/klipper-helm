@@ -1,2 +1,3 @@
 target/
 .buildroot/
+buildroot/keys/*.key.pem

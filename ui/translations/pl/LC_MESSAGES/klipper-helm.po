@@ -31,6 +31,9 @@ msgstr "Ustawienia panelu"
 msgid "Network"
 msgstr "Sieć"
 
+msgid "Updates"
+msgstr "Aktualizacje"
+
 msgid "Home"
 msgstr "Pulpit"
 
@@ -238,6 +241,9 @@ msgstr "Zastosuj"
 msgid "no adapter"
 msgstr "brak karty"
 
+msgid "Hidden network"
+msgstr "Ukryta sieć"
+
 msgid "Scanning..."
 msgstr "Skanowanie..."
 
@@ -336,6 +342,45 @@ msgstr "Presety"
 
 msgid "Heaters off"
 msgstr "Wyłącz grzanie"
+
+msgid "Installed version"
+msgstr "Zainstalowana wersja"
+
+msgid "System partition"
+msgstr "Partycja systemu"
+
+msgid "Checking for updates..."
+msgstr "Sprawdzanie aktualizacji..."
+
+msgid "This is the latest version."
+msgstr "To najnowsza wersja."
+
+msgid "Version {} is available."
+msgstr "Dostępna jest wersja {}."
+
+msgid "Downloading version {}..."
+msgstr "Pobieranie wersji {}..."
+
+msgid "Installing version {}... Do not switch off the device."
+msgstr "Instalowanie wersji {}... Nie wyłączaj urządzenia."
+
+msgid "Version {} is installed. Restart to use it."
+msgstr "Wersja {} jest zainstalowana. Uruchom ponownie, aby jej używać."
+
+msgid "Update failed: {}"
+msgstr "Aktualizacja nie powiodła się: {}"
+
+msgid "The update is installed next to the current system. If the new system does not start, the panel returns to the current one."
+msgstr "Aktualizacja instaluje się obok obecnego systemu. Jeśli nowy system nie wystartuje, panel wróci do obecnego."
+
+msgid "Updates can only be installed on the panel's own system; here they are only checked."
+msgstr "Aktualizacje można instalować tylko w systemie panelu; tutaj są jedynie sprawdzane."
+
+msgid "Check for updates"
+msgstr "Sprawdź aktualizacje"
+
+msgid "Download and install"
+msgstr "Pobierz i zainstaluj"
 
 msgid "Connecting..."
 msgstr "Łączenie..."
@@ -436,17 +481,17 @@ msgstr "{} - temperatura docelowa"
 msgid "Password for {}"
 msgstr "Hasło do {}"
 
-msgid "Decrease {}"
-msgstr "Zmniejsz: {}"
-
-msgid "Increase {}"
-msgstr "Zwiększ: {}"
-
 msgid "Hidden network name (SSID)"
 msgstr "Nazwa ukrytej sieci (SSID)"
 
 msgid "Password for {} (empty for an open network)"
 msgstr "Hasło do {} (puste dla sieci otwartej)"
 
-msgid "Hidden network"
-msgstr "Ukryta sieć"
+msgid "Decrease {}"
+msgstr "Zmniejsz: {}"
+
+msgid "Increase {}"
+msgstr "Zwiększ: {}"
+
+msgid "No releases found. The repository may have no releases yet, or it is private and needs a token (update_token in the config file)."
+msgstr "Nie znaleziono wydań. Repozytorium może nie mieć jeszcze wydań albo jest prywatne i wymaga tokenu (update_token w pliku konfiguracji)."

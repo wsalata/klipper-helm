@@ -7,6 +7,8 @@ export KLIPPER_HELM_CONFIG=/data/klipper-helm/config.toml
 # The panel may change the network setup (System -> Network)
 export KLIPPER_HELM_MANAGE_NETWORK=1
 export KLIPPER_HELM_DHCPCD_CONF=/data/network/dhcpcd.conf
+# ...and install system updates (System -> Updates)
+export KLIPPER_HELM_MANAGE_SYSTEM=1
 # Only picks the UI language when the settings say "System"
 export LANG=pl_PL.UTF-8
 

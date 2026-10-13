@@ -118,8 +118,10 @@ pub fn wire(ui: &AppWindow, cfg: Rc<RefCell<Config>>, tx: UnboundedSender<Comman
                 .iter()
                 .map(|p| config::Preset { name: p.name.trim().to_string(), extruder: p.extruder, bed: p.bed })
                 .collect(),
-            // Edited on the Network screen
+            // Edited on the Network screen / only in the file
             network: cfg.borrow().network.clone(),
+            update_repo: cfg.borrow().update_repo.clone(),
+            update_token: cfg.borrow().update_token.clone(),
         };
         if let Err(e) = new.validate() {
             set_error(&s, e.code, &e.arg);

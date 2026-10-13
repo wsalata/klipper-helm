@@ -7,6 +7,11 @@ moonraker_url = "ws://127.0.0.1:7125/websocket"
 # UI language: "auto" (system locale), "en" or "pl"
 language = "auto"
 
+# System updates: GitHub repository with the releases. A private repository also needs
+# a token with read-only access to its contents.
+update_repo = "wsalata/klipper-helm"
+# update_token = "github_pat_..."
+
 # Manual movement speeds [mm/s]
 xy_speed = 100
 z_speed = 10

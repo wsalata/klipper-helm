@@ -46,6 +46,43 @@ Target: **Odroid XU4** (Exynos 5422) with an HDMI screen and a USB touch screen.
 - Per-device overrides go in `/data/klipper-helm/env`, e.g. `SLINT_KMS_ROTATION=180`, or
   `SLINT_SCALE_FACTOR=1` to turn the scaling off.
 
+## Updates
+
+The card holds two root filesystems (A and B), each with its own kernel, plus the `boot` and `data`
+partitions. **System → Updates** in the panel checks the GitHub releases of `update_repo` (see
+[config.example.toml](../config.example.toml)), downloads the signed update bundle (`.raucb`) to `/data`
+and installs it with [RAUC](https://rauc.io) into the slot that is not running. After a restart U-Boot
+([boot.cmd](board/odroidxu4/boot.cmd)) boots the new slot; if it fails to boot three times, U-Boot goes
+back to the previous one. A system that boots completely marks itself good
+([S99rauc-mark-good](board/odroidxu4/rootfs-overlay/etc/init.d/S99rauc-mark-good)). Settings on `/data`
+are kept.
+
+- Bundles must be signed with the key matching `buildroot/keys/release.cert.pem`, which is built into the
+  image; anything else is rejected.
+- A private repository needs `update_token` in the config file (a GitHub token with read-only access to
+  the repository's contents).
+- Images built before the A/B layout (a single root partition) cannot be updated this way: flash the
+  new image once.
+
+## Releasing a version
+
+One-time setup:
+
+1. `buildroot/keys/create-keys.sh` creates `release.cert.pem` (commit it) and `release.key.pem`
+   (never commit it; keep a backup: devices only accept updates signed with this key).
+2. In the GitHub repository, add the secret `RAUC_SIGNING_KEY` with the content of `release.key.pem`.
+
+For each release:
+
+1. Set the new version in `Cargo.toml` and commit.
+2. Tag and push: `git tag v0.2.0 && git push github v0.2.0`.
+3. [The release workflow](../.github/workflows/release.yml) builds the image and the update bundle and
+   publishes them as a GitHub release (`klipper-helm-odroidxu4-<version>.img.xz` for flashing,
+   `.raucb` for updates). Panels then offer the update.
+
+Local builds sign the bundle with `buildroot/keys/release.key.pem` if it exists and get the version
+`<Cargo.toml version>-dev`, which every release counts as newer.
+
 ## Building
 
 On a Linux PC with the usual Buildroot host tools (gcc, g++, make, perl, rsync, cpio, unzip, bc, file, wget)

@@ -309,6 +309,26 @@ export global Network {
     callback edit-text(string, string);
 }
 
+// System updates (GitHub releases installed with RAUC into the inactive A/B slot)
+export global Update {
+    // false on a PC: checking only
+    in property <bool> managed;
+    in property <string> current-version;
+    // "A" or "B" on the panel's own system, "" elsewhere
+    in property <string> slot;
+    // "idle", "checking", "up-to-date", "no-release", "available", "downloading", "installing",
+    // "installed", "error"
+    in property <string> state;
+    in property <string> latest-version;
+    in property <string> notes;
+    in property <float> progress;
+    in property <string> error;
+
+    callback check();
+    callback install();
+    callback reboot();
+}
+
 export global Nav {
     in-out property <int> page: 0;
 }

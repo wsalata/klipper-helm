@@ -6,6 +6,7 @@ mod network;
 mod printer;
 mod settings;
 mod thumbs;
+mod update;
 
 use moonraker::Command;
 use slint::{ComponentHandle, ModelRc, SharedString, Timer, TimerMode, VecModel};
@@ -41,6 +42,7 @@ fn main() -> anyhow::Result<()> {
     let shared_cfg = Rc::new(RefCell::new(cfg.clone()));
     settings::wire(&ui, shared_cfg.clone(), tx.clone());
     network::wire(&ui, shared_cfg);
+    update::wire(&ui, cfg.update_repo.clone(), cfg.update_token.clone());
 
     let clock = Timer::default();
     let weak = ui.as_weak();
@@ -173,6 +175,10 @@ fn snapshot_pages(ui: &AppWindow, dir: String) -> Timer {
     steps.push(Box::new(|ui| {
         ui.global::<Network>().invoke_load();
         ui.global::<Nav>().set_page(9);
+    }));
+    steps.push(Box::new(|ui| {
+        ui.global::<Update>().invoke_check();
+        ui.global::<Nav>().set_page(10);
     }));
     steps.push(Box::new(|ui| {
         ui.global::<Nav>().set_page(8);
