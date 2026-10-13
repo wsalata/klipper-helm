@@ -9,26 +9,42 @@ Target: **Odroid XU4** (Exynos 5422) with an HDMI screen and a USB touch screen.
 
 - Mainline Linux 6.12 LTS (`exynos_defconfig` + [linux.fragment](board/odroidxu4/linux.fragment)):
   HDMI through exynos-drm, USB HID touch screens, the RTL8153 Gigabit Ethernet port, the fan.
+  [A patch](board/odroidxu4/patches/linux) adds Hardkernel's HDMI PHY settings and picks the nearest
+  one within 2%: mainline knows too few, so small screens (800x480) otherwise stay dark.
 - Mainline U-Boot (`odroid-xu3`, which covers the XU4) behind Hardkernel's signed BL1/BL2/TZSW blobs
   (package [odroidxu4-blobs](package/odroidxu4-blobs)), booting through
   [extlinux.conf](board/odroidxu4/extlinux.conf).
-- BusyBox init, eudev, DHCP on `eth0`, `ntpd` for the clock, time zone Europe/Warsaw.
+- BusyBox init, eudev, `ntpd` for the clock, time zone Europe/Warsaw.
+- Networking: `dhcpcd` on every interface, `wpa_supplicant` for USB Wi-Fi adapters (drivers as modules
+  for Realtek RTL8188/8192/8723/8821/8822, MediaTek MT7601U/MT7921AU, Ralink RT2870/RT3070/RT5370 and
+  Atheros AR9271, with their firmware). Interfaces are named `eth0` and `wlan0` (`net.ifnames=0`).
 - The panel built with `--no-default-features --features embedded`: KMS output with Slint's software
   renderer, so no GPU driver is needed (Mali-T628 support in Mesa is not reliable).
 
 ## Boot and runtime
 
-- Kernel messages go to the serial console (`ttySAC2`, 115200 baud) only; the screen stays dark until
-  the panel appears.
+- Kernel messages go to the serial console (`ttySAC2`, 115200 baud) only. The screen shows the
+  Klipper Helm logo from the moment HDMI starts (kernel boot logo, centred) until the panel takes over
+  with the same logo while it connects. The logo image is
+  [boot-logo.png](board/odroidxu4/boot-logo.png), rendered from `ui/icons/logo.svg` and the panel's
+  fonts by [make-boot-logo.sh](board/odroidxu4/make-boot-logo.sh); `quiet` is not used because it
+  also hides the logo (`loglevel=5` keeps the serial console short instead).
 - `/etc/inittab` starts [klipper-helm-start](board/odroidxu4/rootfs-overlay/usr/bin/klipper-helm-start)
-  and restarts it whenever the panel exits. Its output goes to `/tmp/klipper-helm.log`.
+  and restarts it whenever the panel exits. Its output goes to `/data/logs/klipper-helm.log`
+  (see Troubleshooting).
 - The root filesystem is mounted read-only, so pulling the plug cannot corrupt it. The settings live on
   a separate `data` partition mounted on `/data` and checked with `fsck` at boot
   ([S15data](board/odroidxu4/rootfs-overlay/etc/init.d/S15data)).
 - Set the Moonraker address in **System → Panel settings**; it is saved to
   `/data/klipper-helm/config.toml` and survives reboots.
-- Per-device overrides go in `/data/klipper-helm/env`, e.g. `SLINT_KMS_ROTATION=180` or
-  `SLINT_SCALE_FACTOR=1.25`.
+- **System → Network** shows the Ethernet and Wi-Fi addresses, switches Ethernet between DHCP and a
+  static address, and scans for and joins Wi-Fi networks. Settings are kept in `/data/network/`
+  (`dhcpcd.conf`, `wpa_supplicant.conf`), created with defaults (DHCP) on first boot. A USB Wi-Fi
+  adapter can be plugged in at any time.
+- The UI is designed for 800x480 and is scaled to fill larger screens (1024x600 → 1.25, 1280x720 → 1.5),
+  computed at start from the display's preferred mode.
+- Per-device overrides go in `/data/klipper-helm/env`, e.g. `SLINT_KMS_ROTATION=180`, or
+  `SLINT_SCALE_FACTOR=1` to turn the scaling off.
 
 ## Building
 
@@ -62,6 +78,22 @@ or use balenaEtcher. On the XU4, set the boot selector switch to the medium you 
 
 ## Troubleshooting
 
-- Nothing on the screen: connect a USB-serial adapter to the UART header (1.8 V levels) to see the boot
-  log, then log in as `root` (no password) and check `/tmp/klipper-helm.log`.
+On every boot the panel's start script saves diagnostics to the `data` partition, in `logs/`:
+`dmesg.txt` (kernel log with display mode decisions), `drm.txt` (connectors and the modes they accept),
+`edid-*.bin` (what the screen reports), `input.txt` (touch devices) and `klipper-helm.log` (the panel).
+Read them on a Linux PC:
+
+```sh
+sudo mount -L data /mnt && ls /mnt/logs && sudo umount /mnt
+```
+
+- Small HDMI screens are often powered by their USB touch cable: without it the screen stays dark
+  and `drm.txt` lists only the fallback mode 640x480 (no EDID). A charge-only cable powers the screen
+  but the touch controller does not appear in `input.txt`.
+- Screen dark although powered: add `drm.debug=0x4 console=tty1` to the `append` line in
+  `extlinux/extlinux.conf` on the boot partition. Boot messages then appear on the screen, and
+  `dmesg.txt` shows the screen's modes and `Could not find phy config` for any that were rejected.
+- `drm.txt` shows the mode but the panel does not appear: see `klipper-helm.log`.
+- A USB-serial adapter on the UART header (1.8 V levels) shows the boot log live; log in as `root`
+  (no password).
 - Touch does not respond: `cat /proc/bus/input/devices` should list the touch controller.

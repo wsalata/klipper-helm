@@ -16,6 +16,8 @@ KLIPPER_HELM_OVERRIDE_SRCDIR_RSYNC_EXCLUSIONS = \
 
 # KMS + software renderer only: no winit, X11, Wayland or GPU libraries
 KLIPPER_HELM_CARGO_BUILD_OPTS = --no-default-features --features embedded
+# The install step runs its own cargo build, so it needs the same features
+KLIPPER_HELM_CARGO_INSTALL_OPTS = $(KLIPPER_HELM_CARGO_BUILD_OPTS)
 
 # Local sources skip Buildroot's download step, where cargo packages normally
 # get their crates vendored, so vendor them here instead (needs network access).

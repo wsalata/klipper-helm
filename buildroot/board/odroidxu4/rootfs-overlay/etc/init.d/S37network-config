@@ -1,0 +1,20 @@
+#!/bin/sh
+#
+# Network settings live on the writable data partition; create the defaults
+# on first boot. /etc/dhcpcd.conf points to /data/network/dhcpcd.conf.
+#
+
+case "$1" in
+start)
+	mkdir -p /data/network /tmp/dhcpcd
+	for f in dhcpcd.conf wpa_supplicant.conf; do
+		[ -s /data/network/$f ] || cp /etc/klipper-helm/$f.default /data/network/$f
+	done
+	;;
+stop)
+	;;
+*)
+	echo "Usage: $0 {start|stop}"
+	exit 1
+	;;
+esac

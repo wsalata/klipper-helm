@@ -28,6 +28,9 @@ msgstr "System"
 msgid "Panel settings"
 msgstr "Ustawienia panelu"
 
+msgid "Network"
+msgstr "Sieć"
+
 msgid "Home"
 msgstr "Pulpit"
 
@@ -72,6 +75,9 @@ msgstr "Zamknij"
 
 msgid "Print"
 msgstr "Drukuj"
+
+msgid "Connection settings"
+msgstr "Ustawienia połączenia"
 
 msgid "Restart"
 msgstr "Restart"
@@ -183,6 +189,69 @@ msgstr "Wszystkie"
 
 msgid "Motors off"
 msgstr "Wyłącz silniki"
+
+msgid "Connected"
+msgstr "Połączono"
+
+msgid "Saved"
+msgstr "Zapisana"
+
+msgid "Forget the network {}?"
+msgstr "Zapomnieć sieć {}?"
+
+msgid "Join the open network {}?"
+msgstr "Połączyć z otwartą siecią {}?"
+
+msgid "Status only: network changes are disabled on this system"
+msgstr "Tylko podgląd: zmiany sieci są wyłączone na tym komputerze"
+
+msgid "no port"
+msgstr "brak portu"
+
+msgid "no cable"
+msgstr "brak kabla"
+
+msgid "getting an address..."
+msgstr "pobieranie adresu..."
+
+msgid "Static address"
+msgstr "Stały adres"
+
+msgid "IP address"
+msgstr "Adres IP"
+
+msgid "IP address (e.g. 192.168.1.20/24)"
+msgstr "Adres IP (np. 192.168.1.20/24)"
+
+msgid "Gateway"
+msgstr "Brama"
+
+msgid "Gateway (e.g. 192.168.1.1)"
+msgstr "Brama (np. 192.168.1.1)"
+
+msgid "DNS servers (e.g. 192.168.1.1 1.1.1.1)"
+msgstr "Serwery DNS (np. 192.168.1.1 1.1.1.1)"
+
+msgid "Apply"
+msgstr "Zastosuj"
+
+msgid "no adapter"
+msgstr "brak karty"
+
+msgid "Scanning..."
+msgstr "Skanowanie..."
+
+msgid "Scan"
+msgstr "Skanuj"
+
+msgid "No Wi-Fi adapter. Plug in a USB Wi-Fi adapter to use wireless networks."
+msgstr "Brak karty Wi-Fi. Podłącz kartę Wi-Fi na USB, aby korzystać z sieci bezprzewodowych."
+
+msgid "Looking for networks..."
+msgstr "Szukanie sieci..."
+
+msgid "No networks found"
+msgstr "Nie znaleziono sieci"
 
 msgid "Preset name"
 msgstr "Nazwa presetu"
@@ -322,6 +391,27 @@ msgstr "Dysza"
 msgid "Bed"
 msgstr "Stół"
 
+msgid "Wi-Fi service not running"
+msgstr "Usługa Wi-Fi nie działa"
+
+msgid "Not connected"
+msgstr "Nie połączono"
+
+msgid "Invalid IP address: {} (e.g. 192.168.1.20/24)"
+msgstr "Nieprawidłowy adres IP: {} (np. 192.168.1.20/24)"
+
+msgid "Invalid gateway: {}"
+msgstr "Nieprawidłowa brama: {}"
+
+msgid "Invalid DNS server: {}"
+msgstr "Nieprawidłowy serwer DNS: {}"
+
+msgid "Could not save settings: {}"
+msgstr "Nie udało się zapisać ustawień: {}"
+
+msgid "Could not apply the change: {}"
+msgstr "Nie udało się zastosować zmiany: {}"
+
 msgid "Moonraker address must start with ws:// or wss:// and contain no spaces"
 msgstr "Adres Moonrakera musi zaczynać się od ws:// lub wss:// i nie może zawierać spacji"
 
@@ -334,9 +424,6 @@ msgstr "Każdy preset musi mieć nazwę"
 msgid "Preset {}: temperature out of range"
 msgstr "Preset {}: temperatura poza zakresem"
 
-msgid "Could not save settings: {}"
-msgstr "Nie udało się zapisać ustawień: {}"
-
 msgid "No connection to Moonraker"
 msgstr "Brak połączenia z Moonrakerem"
 
@@ -346,8 +433,20 @@ msgstr "Zapisano ustawienia"
 msgid "{} - target temperature"
 msgstr "{} - temperatura docelowa"
 
+msgid "Password for {}"
+msgstr "Hasło do {}"
+
 msgid "Decrease {}"
 msgstr "Zmniejsz: {}"
 
 msgid "Increase {}"
 msgstr "Zwiększ: {}"
+
+msgid "Hidden network name (SSID)"
+msgstr "Nazwa ukrytej sieci (SSID)"
+
+msgid "Password for {} (empty for an open network)"
+msgstr "Hasło do {} (puste dla sieci otwartej)"
+
+msgid "Hidden network"
+msgstr "Ukryta sieć"

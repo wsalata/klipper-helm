@@ -17,6 +17,41 @@ pub struct Config {
     pub z_speed: f32,
     #[serde(rename = "preset")]
     pub presets: Vec<Preset>,
+    pub network: NetworkConfig,
+}
+
+/// Ethernet address of the embedded image (Wi-Fi networks live in wpa_supplicant.conf).
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
+#[serde(default)]
+pub struct NetworkConfig {
+    /// false: DHCP
+    pub eth_static: bool,
+    /// "192.168.1.20/24" (a missing prefix means /24)
+    pub eth_address: String,
+    pub eth_gateway: String,
+    /// One or more servers separated by spaces or commas
+    pub eth_dns: String,
+}
+
+impl NetworkConfig {
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        if !self.eth_static {
+            return Ok(());
+        }
+        let (ip, prefix) = self.eth_address.split_once('/').unwrap_or((&self.eth_address, "24"));
+        if ip.parse::<std::net::Ipv4Addr>().is_err() || !prefix.parse::<u8>().is_ok_and(|p| (1..=32).contains(&p)) {
+            return Err(ConfigError::new("ip-address", self.eth_address.clone()));
+        }
+        if !self.eth_gateway.is_empty() && self.eth_gateway.parse::<std::net::Ipv4Addr>().is_err() {
+            return Err(ConfigError::new("ip-gateway", self.eth_gateway.clone()));
+        }
+        for dns in self.eth_dns.split([' ', ',']).filter(|s| !s.is_empty()) {
+            if dns.parse::<std::net::Ipv4Addr>().is_err() {
+                return Err(ConfigError::new("ip-dns", dns));
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -34,7 +69,7 @@ pub struct ConfigError {
 }
 
 impl ConfigError {
-    fn new(code: &'static str, arg: impl Into<String>) -> Self {
+    pub fn new(code: &'static str, arg: impl Into<String>) -> Self {
         Self { code, arg: arg.into() }
     }
 }
@@ -54,6 +89,7 @@ impl Default for Config {
                 preset("ABS", 250.0, 100.0),
                 preset("ASA", 260.0, 100.0),
             ],
+            network: NetworkConfig::default(),
         }
     }
 }
@@ -150,6 +186,19 @@ mod tests {
     fn old_file_without_language_still_loads() {
         let cfg: Config = toml::from_str("moonraker_url = \"ws://p/websocket\"\n").unwrap();
         assert_eq!(cfg.language, "auto");
+    }
+
+    #[test]
+    fn network_validation() {
+        let mut net = NetworkConfig { eth_static: true, eth_address: "192.168.1.20".into(), ..Default::default() };
+        assert!(net.validate().is_ok());
+        net.eth_address = "192.168.1.20/33".into();
+        assert_eq!(net.validate().unwrap_err().code, "ip-address");
+        net.eth_address = "10.0.0.5/8".into();
+        net.eth_dns = "1.1.1.1, nope".into();
+        assert_eq!(net.validate().unwrap_err(), ConfigError::new("ip-dns", "nope"));
+        // DHCP ignores the static fields
+        assert!(NetworkConfig { eth_address: "x".into(), ..Default::default() }.validate().is_ok());
     }
 
     #[test]

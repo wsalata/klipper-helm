@@ -1,32 +1,7 @@
 import { Theme } from "../theme.slint";
 import { Overlay, Nav, Settings, Preset, Strings } from "../state.slint";
-import { Btn, BtnKind, Card, Caption } from "../widgets.slint";
+import { Btn, BtnKind, Card, Caption, SettingRow } from "../widgets.slint";
 import { ScrollView } from "std-widgets.slint";
-
-// Tappable "label  value" row that opens an editor.
-component SettingRow inherits Rectangle {
-    in property <string> label;
-    in property <string> value;
-    callback clicked();
-    height: 52px;
-    border-radius: 8px;
-    background: ta.pressed ? Theme.border : Theme.surface-2;
-    HorizontalLayout {
-        padding-left: 12px;
-        padding-right: 12px;
-        spacing: 12px;
-        Caption { text: root.label; horizontal-stretch: 0; }
-        Text {
-            text: root.value;
-            color: Theme.text;
-            horizontal-alignment: right;
-            vertical-alignment: center;
-            overflow: elide;
-            horizontal-stretch: 1;
-        }
-    }
-    ta := TouchArea { clicked => { root.clicked(); } }
-}
 
 component PresetRow inherits HorizontalLayout {
     in property <Preset> preset;

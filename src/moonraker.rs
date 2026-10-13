@@ -71,8 +71,14 @@ type Ws = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
 pub async fn run(mut cfg: Config, ui: Weak<AppWindow>, mut rx: UnboundedReceiver<Command>) {
     let mut thumbs = Thumbs::new(&cfg.moonraker_url);
+    // "Connecting..." only for the first attempt at an address; later retries keep showing
+    // "No connection", so the screen does not flicker between the two every few seconds
+    let mut announce = true;
     loop {
-        bridge::conn(&ui, Conn::Connecting, Status::Connecting);
+        if announce {
+            bridge::conn(&ui, Conn::Connecting, Status::Connecting);
+        }
+        announce = false;
         let mut next = None;
         match tokio::time::timeout(CONNECT_TIMEOUT, connect_async(cfg.moonraker_url.as_str())).await {
             Ok(Ok((ws, _))) => {
@@ -109,6 +115,7 @@ pub async fn run(mut cfg: Config, ui: Weak<AppWindow>, mut rx: UnboundedReceiver
 
         if let Some(new) = next {
             if new.moonraker_url != cfg.moonraker_url {
+                announce = true;
                 // A different printer: nothing from the previous one may stay on screen
                 thumbs = Thumbs::new(&new.moonraker_url);
                 bridge::reset(&ui);

@@ -61,6 +61,14 @@ export struct ConsoleLine {
     kind: int,
 }
 
+export struct WifiNetwork {
+    ssid: string,
+    signal: float,     // 0..1
+    secure: bool,
+    current: bool,     // connected now
+    saved: bool,       // known to wpa_supplicant
+}
+
 export struct Preset {
     name: string,
     extruder: float,
@@ -170,6 +178,22 @@ export global Strings {
         return f.name;
     }
 
+    public pure function wifi-state(state: string) -> string {
+        if (state == "connected") { return @tr("Connected"); }
+        if (state == "connecting") { return @tr("Connecting..."); }
+        if (state == "unavailable") { return @tr("Wi-Fi service not running"); }
+        return @tr("Not connected");
+    }
+
+    public pure function network-error(code: string, arg: string) -> string {
+        if (code == "ip-address") { return @tr("Invalid IP address: {} (e.g. 192.168.1.20/24)", arg); }
+        if (code == "ip-gateway") { return @tr("Invalid gateway: {}", arg); }
+        if (code == "ip-dns") { return @tr("Invalid DNS server: {}", arg); }
+        if (code == "save") { return @tr("Could not save settings: {}", arg); }
+        if (code == "apply") { return @tr("Could not apply the change: {}", arg); }
+        return arg;
+    }
+
     public pure function settings-error(code: string, arg: string) -> string {
         if (code == "url") { return @tr("Moonraker address must start with ws:// or wss:// and contain no spaces"); }
         if (code == "speed") { return @tr("{} speed must be between 0.1 and 1000 mm/s", arg); }
@@ -252,6 +276,39 @@ export global Settings {
     callback edit-text(string, string);
 }
 
+// Network screen: status pushed from Rust every few seconds, plus the Ethernet draft.
+export global Network {
+    // false on a PC: status only, no changes to the system's network setup
+    in property <bool> managed;
+    in property <string> eth-name;
+    in property <bool> eth-up;
+    in property <string> eth-ip;
+    in property <bool> wifi-present;
+    // "connected", "connecting", "disconnected" or "unavailable"
+    in property <string> wifi-state;
+    in property <string> wifi-ssid;
+    in property <string> wifi-ip;
+    in property <bool> scanning;
+    in property <[WifiNetwork]> networks;
+
+    in-out property <bool> eth-static;
+    in-out property <string> eth-address;
+    in-out property <string> eth-gateway;
+    in-out property <string> eth-dns;
+    in-out property <string> error-code;
+    in-out property <string> error-arg;
+
+    // Fills the Ethernet draft from the settings and starts a Wi-Fi scan
+    callback load();
+    callback scan();
+    callback connect(string, string);   // ssid, password ("" for open networks)
+    callback connect-hidden(string, string);
+    callback forget(string);
+    callback apply-ethernet();
+    // Text dialog results; id: "eth-address", "eth-gateway", "eth-dns"
+    callback edit-text(string, string);
+}
+
 export global Nav {
     in-out property <int> page: 0;
 }
@@ -273,6 +330,9 @@ export global Overlay {
     in-out property <string> confirm-arg;
 
     in-out property <bool> text-open;
+    // "settings", "network", "wifi" (the id is then the SSID to join),
+    // "hidden-ssid" (asks for a hidden network's name) or "hidden-wifi" (its password)
+    in-out property <string> text-purpose;
     in-out property <string> text-title;
     in-out property <string> text-id;
     // Edited text, split at the cursor
@@ -313,11 +373,32 @@ export global Overlay {
     }
 
     public function ask-text(id: string, title: string, current: string) {
+        text-purpose = "settings";
         text-title = title;
         text-id = id;
         text-before = current;
         text-after = "";
         text-open = true;
+    }
+
+    public function ask-network-text(id: string, title: string, current: string) {
+        ask-text(id, title, current);
+        text-purpose = "network";
+    }
+
+    public function ask-wifi-password(ssid: string) {
+        ask-text(ssid, @tr("Password for {}", ssid), "");
+        text-purpose = "wifi";
+    }
+
+    public function ask-hidden-network() {
+        ask-text("", @tr("Hidden network name (SSID)"), "");
+        text-purpose = "hidden-ssid";
+    }
+
+    public function ask-hidden-password(ssid: string) {
+        ask-text(ssid, @tr("Password for {} (empty for an open network)", ssid), "");
+        text-purpose = "hidden-wifi";
     }
 
     public function open-file(path: string) {

@@ -118,6 +118,8 @@ pub fn wire(ui: &AppWindow, cfg: Rc<RefCell<Config>>, tx: UnboundedSender<Comman
                 .iter()
                 .map(|p| config::Preset { name: p.name.trim().to_string(), extruder: p.extruder, bed: p.bed })
                 .collect(),
+            // Edited on the Network screen
+            network: cfg.borrow().network.clone(),
         };
         if let Err(e) = new.validate() {
             set_error(&s, e.code, &e.arg);

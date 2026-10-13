@@ -1,5 +1,5 @@
 import { Theme } from "../theme.slint";
-import { Printer, Overlay, Nav, Settings, Strings } from "../state.slint";
+import { Printer, Overlay, Nav, Settings, Strings, Network } from "../state.slint";
 import { Btn, BtnKind, Card, Caption, InfoRow } from "../widgets.slint";
 
 export component SystemPage inherits Rectangle {
@@ -24,12 +24,23 @@ export component SystemPage inherits Rectangle {
                     wrap: word-wrap;
                 }
                 Rectangle { vertical-stretch: 1; }
-                Btn {
-                    text: @tr("Panel settings");
-                    icon: @image-url("../icons/system.svg");
-                    clicked => {
-                        Settings.load();
-                        Nav.page = 8;
+                HorizontalLayout {
+                    spacing: Theme.gap;
+                    Btn {
+                        text: @tr("Panel settings");
+                        icon: @image-url("../icons/system.svg");
+                        clicked => {
+                            Settings.load();
+                            Nav.page = 8;
+                        }
+                    }
+                    Btn {
+                        text: @tr("Network");
+                        icon: @image-url("../icons/wifi.svg");
+                        clicked => {
+                            Network.load();
+                            Nav.page = 9;
+                        }
                     }
                 }
             }

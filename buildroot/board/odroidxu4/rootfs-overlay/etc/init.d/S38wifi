@@ -1,0 +1,33 @@
+#!/bin/sh
+#
+# wpa_supplicant without fixed interfaces: USB Wi-Fi adapters are attached
+# when they appear (udev rule 90-klipper-helm-wifi.rules), and dhcpcd gets
+# an address once the link is up.
+#
+
+GLOBAL=/var/run/wpa_supplicant-global
+
+case "$1" in
+start)
+	printf "Starting wpa_supplicant: "
+	mkdir -p /var/run/wpa_supplicant
+	if wpa_supplicant -B -s -g "$GLOBAL" -P /var/run/wpa_supplicant.pid; then
+		echo "OK"
+	else
+		echo "FAIL"
+		exit 1
+	fi
+	# Adapters that were plugged in before wpa_supplicant started
+	for dev in /sys/class/net/*; do
+		[ -d "$dev/wireless" ] && /usr/libexec/klipper-helm/wifi-attach "${dev##*/}"
+	done
+	;;
+stop)
+	printf "Stopping wpa_supplicant: "
+	start-stop-daemon -K -q -p /var/run/wpa_supplicant.pid && echo "OK" || echo "FAIL"
+	;;
+*)
+	echo "Usage: $0 {start|stop}"
+	exit 1
+	;;
+esac

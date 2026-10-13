@@ -1,0 +1,12 @@
+# Default network setup: DHCP on every interface (Ethernet and Wi-Fi).
+# Replaced by the panel when the Ethernet address is changed (System -> Network).
+hostname
+clientid
+persistent
+option rapid_commit
+option domain_name_servers, domain_name, domain_search, host_name
+option classless_static_routes
+option interface_mtu
+require dhcp_server_identifier
+slaac private
+denyinterfaces lo

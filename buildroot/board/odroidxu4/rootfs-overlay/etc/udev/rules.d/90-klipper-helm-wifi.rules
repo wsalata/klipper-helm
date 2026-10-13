@@ -1,0 +1,2 @@
+# A USB Wi-Fi adapter was plugged in: let wpa_supplicant manage it
+ACTION=="add", SUBSYSTEM=="net", KERNEL=="wlan*", RUN+="/usr/libexec/klipper-helm/wifi-attach %k"

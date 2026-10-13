@@ -1,5 +1,5 @@
 import { Theme } from "theme.slint";
-import { Printer, Actions, Overlay, Nav, Conn, Settings, Strings, Keys } from "state.slint";
+import { Printer, Actions, Overlay, Nav, Conn, Settings, Strings, Keys, Network } from "state.slint";
 import { Btn, BtnKind, Card, Caption, InfoRow, Thumb, CursorText, Stepper } from "widgets.slint";
 
 // Dimmed backdrop that blocks touches to the screen below.
@@ -97,9 +97,26 @@ export component TextDialog inherits Scrim {
     dismiss => { Overlay.text-open = false; }
     property <bool> upper;
 
+    // 0 = letters, 1 = symbols (Wi-Fi passwords may contain anything)
+    property <int> layer;
+
     function submit() {
-        Settings.edit-text(Overlay.text-id, Overlay.text-before + Overlay.text-after);
+        let value = Overlay.text-before + Overlay.text-after;
+        // Closed first, so a follow-up question (hidden network password) can open it again
         Overlay.text-open = false;
+        if (Overlay.text-purpose == "wifi") {
+            Network.connect(Overlay.text-id, value);
+        } else if (Overlay.text-purpose == "hidden-ssid") {
+            if (value != "") {
+                Overlay.ask-hidden-password(value);
+            }
+        } else if (Overlay.text-purpose == "hidden-wifi") {
+            Network.connect-hidden(Overlay.text-id, value);
+        } else if (Overlay.text-purpose == "network") {
+            Network.edit-text(Overlay.text-id, value);
+        } else {
+            Settings.edit-text(Overlay.text-id, value);
+        }
     }
 
     init => { fs.focus(); }
@@ -146,17 +163,25 @@ export component TextDialog inherits Scrim {
                     for k in ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]: TextKey { key: k; }
                     Btn { text: @tr("Delete"); font-size: Theme.font-s; min-height: 40px; horizontal-stretch: 1.5; clicked => { Actions.text-key("BS"); } }
                 }
-                HorizontalLayout {
+                if root.layer == 0: HorizontalLayout {
                     spacing: 4px;
                     for k in ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "-"]: TextKey { key: k; upper: root.upper; }
                 }
-                HorizontalLayout {
+                if root.layer == 0: HorizontalLayout {
                     spacing: 4px;
                     for k in ["a", "s", "d", "f", "g", "h", "j", "k", "l", ":", "_"]: TextKey { key: k; upper: root.upper; }
                 }
+                if root.layer == 1: HorizontalLayout {
+                    spacing: 4px;
+                    for k in ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "-"]: TextKey { key: k; }
+                }
+                if root.layer == 1: HorizontalLayout {
+                    spacing: 4px;
+                    for k in ["+", "=", "?", ";", "'", "\"", ",", "[", "]", "{", "}"]: TextKey { key: k; }
+                }
                 HorizontalLayout {
                     spacing: 4px;
-                    Btn {
+                    if root.layer == 0: Btn {
                         text: root.upper ? "abc" : "ABC";
                         font-size: Theme.font-s;
                         min-height: 40px;
@@ -164,10 +189,26 @@ export component TextDialog inherits Scrim {
                         active: root.upper;
                         clicked => { root.upper = !root.upper; }
                     }
-                    for k in ["z", "x", "c", "v", "b", "n", "m", ".", "/"]: TextKey { key: k; upper: root.upper; }
+                    if root.layer == 0: HorizontalLayout {
+                        spacing: 4px;
+                        horizontal-stretch: 9;
+                        for k in ["z", "x", "c", "v", "b", "n", "m", ".", "/"]: TextKey { key: k; upper: root.upper; }
+                    }
+                    if root.layer == 1: HorizontalLayout {
+                        spacing: 4px;
+                        horizontal-stretch: 10.5;
+                        for k in ["<", ">", "~", "`", "|", "\\", ":", "_", ".", "/"]: TextKey { key: k; }
+                    }
                 }
                 HorizontalLayout {
                     spacing: 4px;
+                    Btn {
+                        text: root.layer == 0 ? "#+=" : "abc";
+                        font-size: Theme.font-s;
+                        min-height: 40px;
+                        active: root.layer == 1;
+                        clicked => { root.layer = 1 - root.layer; }
+                    }
                     Btn { text: "C"; font-size: Theme.font-s; min-height: 40px; clicked => { Actions.text-key("CLR"); } }
                     Btn { icon: @image-url("icons/left.svg"); min-height: 40px; clicked => { Actions.text-key("LEFT"); } }
                     Btn { icon: @image-url("icons/right.svg"); min-height: 40px; clicked => { Actions.text-key("RIGHT"); } }
@@ -196,6 +237,10 @@ export component ConfirmDialog inherits Scrim {
             Actions.host-shutdown();
         } else if (action == "gcode") {
             Actions.gcode(arg);
+        } else if (action == "wifi-join") {
+            Network.connect(arg, "");
+        } else if (action == "wifi-forget") {
+            Network.forget(arg);
         }
     }
 
@@ -282,12 +327,59 @@ export component FileDialog inherits Scrim {
 }
 
 // Shown instead of a screen when Klipper is not ready or there is no connection.
+// Logo with the "klipperhelm" wordmark, as on the boot screen
+component Wordmark inherits HorizontalLayout {
+    in property <length> size: 50px;
+    alignment: center;
+    Text {
+        text: "klipper";
+        color: Theme.text;
+        font-size: root.size;
+        font-weight: 500;
+    }
+    Text {
+        text: "helm";
+        color: Theme.accent;
+        font-size: root.size;
+        font-weight: 600;
+    }
+}
+
 export component NotReadyPanel inherits Rectangle {
     background: Theme.bg;
-    VerticalLayout {
+
+    // Starting up: a welcome screen until Moonraker answers (or fails to)
+    if Printer.conn == Conn.connecting: VerticalLayout {
+        alignment: center;
+        spacing: 18px;
+        HorizontalLayout {
+            alignment: center;
+            Image {
+                source: @image-url("icons/logo.svg");
+                width: 150px;
+                height: 150px;
+            }
+        }
+        Wordmark {}
+        Text {
+            text: Strings.status(Printer.status);
+            color: Theme.text-dim;
+            horizontal-alignment: center;
+        }
+    }
+
+    if Printer.conn != Conn.connecting: VerticalLayout {
         alignment: center;
         padding: 24px;
         spacing: 14px;
+        HorizontalLayout {
+            alignment: center;
+            Image {
+                source: @image-url("icons/logo.svg");
+                width: 64px;
+                height: 64px;
+            }
+        }
         Text {
             text: Strings.status(Printer.status);
             color: Printer.conn == Conn.connecting ? Theme.text : Theme.warn;
@@ -301,11 +393,48 @@ export component NotReadyPanel inherits Rectangle {
             wrap: word-wrap;
             horizontal-alignment: center;
         }
+        // No Moonraker: the address may be wrong, so its setting is one tap away
+        if Printer.conn != Conn.not-ready: HorizontalLayout {
+            alignment: center;
+            spacing: Theme.gap;
+            Btn {
+                text: @tr("Connection settings");
+                kind: BtnKind.accent;
+                width: 280px;
+                clicked => {
+                    Settings.load();
+                    Nav.page = 8;
+                }
+            }
+            Btn {
+                text: @tr("Network");
+                kind: BtnKind.ghost;
+                width: 150px;
+                clicked => {
+                    Network.load();
+                    Nav.page = 9;
+                }
+            }
+            Btn {
+                text: @tr("Menu");
+                icon: @image-url("icons/menu.svg");
+                kind: BtnKind.ghost;
+                width: 150px;
+                clicked => { Overlay.menu-open = true; }
+            }
+        }
         if Printer.conn == Conn.not-ready: HorizontalLayout {
             alignment: center;
             spacing: Theme.gap;
             Btn { text: @tr("Restart"); width: 200px; clicked => { Actions.restart(); } }
             Btn { text: @tr("Firmware restart"); kind: BtnKind.accent; width: 220px; clicked => { Actions.firmware-restart(); } }
+            Btn {
+                text: @tr("Menu");
+                icon: @image-url("icons/menu.svg");
+                kind: BtnKind.ghost;
+                width: 150px;
+                clicked => { Overlay.menu-open = true; }
+            }
         }
     }
 }
@@ -417,8 +546,8 @@ export component MenuSheet inherits Scrim {
                 for item in root.row2: MenuTile {
                     icon: item.icon;
                     text: item.text;
-                    // Settings (8) is a sub-page of System
-                    active: Nav.page == item.page || (item.page == 7 && Nav.page == 8);
+                    // Settings (8) and Network (9) are sub-pages of System
+                    active: Nav.page == item.page || (item.page == 7 && Nav.page >= 8);
                     clicked => { root.go(item.page); }
                 }
             }

@@ -2,12 +2,13 @@ mod bridge;
 mod config;
 mod line_edit;
 mod moonraker;
+mod network;
 mod printer;
 mod settings;
 mod thumbs;
 
 use moonraker::Command;
-use slint::{ComponentHandle, Model, ModelRc, SharedString, Timer, TimerMode, VecModel};
+use slint::{ComponentHandle, ModelRc, SharedString, Timer, TimerMode, VecModel};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
@@ -36,7 +37,10 @@ fn main() -> anyhow::Result<()> {
 
     let (tx, rx) = mpsc::unbounded_channel::<Command>();
     wire_actions(&ui, &tx);
-    settings::wire(&ui, Rc::new(RefCell::new(cfg.clone())), tx.clone());
+    // One copy of the settings shared by the Settings and Network screens
+    let shared_cfg = Rc::new(RefCell::new(cfg.clone()));
+    settings::wire(&ui, shared_cfg.clone(), tx.clone());
+    network::wire(&ui, shared_cfg);
 
     let clock = Timer::default();
     let weak = ui.as_weak();
@@ -141,6 +145,7 @@ fn wire_actions(ui: &AppWindow, tx: &UnboundedSender<Command>) {
 /// as `page-N.ppm` in the given directory and quits.
 #[cfg(debug_assertions)]
 fn snapshot_pages(ui: &AppWindow, dir: String) -> Timer {
+    use slint::Model;
     type Step = Box<dyn Fn(&AppWindow)>;
     let page = |n: i32| -> Step { Box::new(move |ui| ui.global::<Nav>().set_page(n)) };
     let mut steps: Vec<Step> = (0..8).map(page).collect();
@@ -166,6 +171,11 @@ fn snapshot_pages(ui: &AppWindow, dir: String) -> Timer {
         ui.global::<Nav>().set_page(8);
     }));
     steps.push(Box::new(|ui| {
+        ui.global::<Network>().invoke_load();
+        ui.global::<Nav>().set_page(9);
+    }));
+    steps.push(Box::new(|ui| {
+        ui.global::<Nav>().set_page(8);
         let url = ui.global::<Settings>().get_url();
         ui.global::<Overlay>().invoke_ask_text("url".into(), "Moonraker address".into(), url);
     }));

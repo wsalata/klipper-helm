@@ -1,0 +1,4 @@
+# Wi-Fi networks, managed by the panel (System -> Network)
+ctrl_interface=/var/run/wpa_supplicant
+update_config=1
+country=PL

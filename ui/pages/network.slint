@@ -1,0 +1,224 @@
+import { Theme } from "../theme.slint";
+import { Overlay, Network, Strings, WifiNetwork } from "../state.slint";
+import { Btn, BtnKind, Card, Caption, Bar, SettingRow } from "../widgets.slint";
+import { ListView } from "std-widgets.slint";
+
+component WifiRow inherits Rectangle {
+    in property <WifiNetwork> network;
+    in property <bool> enabled;
+    callback clicked();
+    height: 56px;
+    background: ta.pressed ? Theme.surface-2 : transparent;
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 10px;
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+            spacing: 2px;
+            Text {
+                text: root.network.ssid;
+                color: root.network.current ? Theme.accent : Theme.text;
+                overflow: elide;
+            }
+            if root.network.current || root.network.saved: Caption {
+                text: root.network.current ? @tr("Connected") : @tr("Saved");
+                font-size: 12px;
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            if root.network.secure: Image {
+                source: @image-url("../icons/lock.svg");
+                colorize: Theme.text-dim;
+                width: 18px;
+                height: 18px;
+            }
+            if !root.network.secure: Rectangle { width: 18px; }
+        }
+        VerticalLayout {
+            alignment: center;
+            Bar {
+                width: 56px;
+                value: root.network.signal;
+                fill: root.network.current ? Theme.accent : Theme.text-dim;
+            }
+        }
+    }
+    Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        background: Theme.border;
+    }
+    ta := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component NetworkPage inherits Rectangle {
+    // What tapping a network does: forget the current one, rejoin a saved one,
+    // ask for a password, or confirm joining an open network
+    function choose(n: WifiNetwork) {
+        if (n.current) {
+            Overlay.ask(@tr("Forget the network {}?", n.ssid), "wifi-forget", n.ssid);
+        } else if (n.saved) {
+            Network.connect(n.ssid, "");
+        } else if (n.secure) {
+            Overlay.ask-wifi-password(n.ssid);
+        } else {
+            Overlay.ask(@tr("Join the open network {}?", n.ssid), "wifi-join", n.ssid);
+        }
+    }
+
+    VerticalLayout {
+        padding: Theme.gap;
+        spacing: Theme.gap;
+
+        if Network.error-code != "": Text {
+            text: Strings.network-error(Network.error-code, Network.error-arg);
+            color: Theme.danger-text;
+            font-size: Theme.font-s;
+            wrap: word-wrap;
+        }
+        if !Network.managed: Caption {
+            text: @tr("Status only: network changes are disabled on this system");
+        }
+
+        HorizontalLayout {
+            spacing: Theme.gap;
+            vertical-stretch: 1;
+
+            Card {
+                horizontal-stretch: 1;
+                VerticalLayout {
+                    padding: 14px;
+                    spacing: 10px;
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Text { text: "Ethernet"; color: Theme.text; font-weight: 600; horizontal-stretch: 0; }
+                        Caption {
+                            text: Network.eth-name == "" ? @tr("no port")
+                                : !Network.eth-up ? @tr("no cable")
+                                : Network.eth-ip != "" ? Network.eth-ip
+                                : @tr("getting an address...");
+                            color: Network.eth-up && Network.eth-ip != "" ? Theme.accent : Theme.text-dim;
+                            horizontal-alignment: right;
+                            horizontal-stretch: 1;
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 4px;
+                        Btn {
+                            text: "DHCP";
+                            font-size: Theme.font-s;
+                            active: !Network.eth-static;
+                            clicked => { Network.eth-static = false; }
+                        }
+                        Btn {
+                            text: @tr("Static address");
+                            font-size: Theme.font-s;
+                            active: Network.eth-static;
+                            clicked => { Network.eth-static = true; }
+                        }
+                    }
+                    if Network.eth-static: SettingRow {
+                        label: @tr("IP address");
+                        value: Network.eth-address;
+                        clicked => { Overlay.ask-network-text("eth-address", @tr("IP address (e.g. 192.168.1.20/24)"), Network.eth-address); }
+                    }
+                    if Network.eth-static: SettingRow {
+                        label: @tr("Gateway");
+                        value: Network.eth-gateway;
+                        clicked => { Overlay.ask-network-text("eth-gateway", @tr("Gateway (e.g. 192.168.1.1)"), Network.eth-gateway); }
+                    }
+                    if Network.eth-static: SettingRow {
+                        label: "DNS";
+                        value: Network.eth-dns;
+                        clicked => { Overlay.ask-network-text("eth-dns", @tr("DNS servers (e.g. 192.168.1.1 1.1.1.1)"), Network.eth-dns); }
+                    }
+                    Rectangle { vertical-stretch: 1; }
+                    Btn {
+                        text: @tr("Apply");
+                        kind: BtnKind.accent;
+                        enabled: Network.managed;
+                        clicked => { Network.apply-ethernet(); }
+                    }
+                }
+            }
+
+            Card {
+                horizontal-stretch: 1.3;
+                VerticalLayout {
+                    padding: 14px;
+                    spacing: 8px;
+                    HorizontalLayout {
+                        spacing: 8px;
+                        VerticalLayout {
+                            alignment: center;
+                            horizontal-stretch: 1;
+                            Text { text: "Wi-Fi"; color: Theme.text; font-weight: 600; }
+                            Caption {
+                                text: !Network.wifi-present ? @tr("no adapter")
+                                    : Network.wifi-state == "connected"
+                                        ? Network.wifi-ssid + (Network.wifi-ip != "" ? " · " + Network.wifi-ip : "")
+                                    : Strings.wifi-state(Network.wifi-state);
+                                color: Network.wifi-state == "connected" ? Theme.accent : Theme.text-dim;
+                                overflow: elide;
+                            }
+                        }
+                        Btn {
+                            text: @tr("Hidden network");
+                            font-size: Theme.font-s;
+                            width: 150px;
+                            enabled: Network.wifi-present && Network.managed;
+                            clicked => { Overlay.ask-hidden-network(); }
+                        }
+                        Btn {
+                            text: Network.scanning ? @tr("Scanning...") : @tr("Scan");
+                            icon: @image-url("../icons/refresh.svg");
+                            font-size: Theme.font-s;
+                            width: 150px;
+                            enabled: Network.wifi-present && !Network.scanning;
+                            clicked => { Network.scan(); }
+                        }
+                    }
+
+                    if !Network.wifi-present: VerticalLayout {
+                        alignment: center;
+                        vertical-stretch: 1;
+                        spacing: 10px;
+                        HorizontalLayout {
+                            alignment: center;
+                            Image { source: @image-url("../icons/wifi.svg"); colorize: Theme.border; width: 56px; height: 56px; }
+                        }
+                        Text {
+                            text: @tr("No Wi-Fi adapter. Plug in a USB Wi-Fi adapter to use wireless networks.");
+                            color: Theme.text-dim;
+                            wrap: word-wrap;
+                            horizontal-alignment: center;
+                        }
+                    }
+                    if Network.wifi-present: Rectangle {
+                        vertical-stretch: 1;
+                        background: Theme.bg;
+                        border-radius: Theme.radius;
+                        clip: true;
+                        if Network.networks.length == 0: Caption {
+                            text: Network.scanning ? @tr("Looking for networks...") : @tr("No networks found");
+                        }
+                        ListView {
+                            for n in Network.networks: WifiRow {
+                                network: n;
+                                enabled: Network.managed;
+                                clicked => { root.choose(n); }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
