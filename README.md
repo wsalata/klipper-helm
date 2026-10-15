@@ -43,7 +43,7 @@ Snapshots of all views (debug builds only): `KLIPPER_HELM_SNAPSHOT=<dir> cargo r
 ## Installing on the printer's computer
 
 The panel runs on the computer that runs Klipper (e.g. a Raspberry Pi 4 with Raspberry Pi OS or
-MainsailOS, bookworm or newer), next to Moonraker and Mainsail. Connect the screen to it (HDMI or DSI,
+MainsailOS, Debian bullseye or newer), next to Moonraker and Mainsail. Connect the screen to it (HDMI or DSI,
 touch over USB) and run, as the user Klipper runs as:
 
 ```sh
@@ -59,8 +59,9 @@ The installer:
 - adds `[update_manager klipper-helm]` (type `executable`) to `moonraker.conf` and the service to
   `moonraker.asvc`, so updates appear in Mainsail next to Klipper's and Moonraker's, and Mainsail can
   restart the panel;
-- with NetworkManager (Raspberry Pi OS bookworm), adds a polkit rule that lets the panel change the
-  network settings from the Network screen.
+- with NetworkManager (Raspberry Pi OS / MainsailOS on bookworm or newer), adds a polkit rule that
+  lets the panel change the network settings from the Network screen; on older systems (dhcpcd)
+  the Network screen only shows the status.
 
 `bash install.sh --uninstall` removes it all again and re-enables KlipperScreen if it was in use.
 
@@ -72,7 +73,7 @@ settings (`klipper-helm.toml`); both can be edited in Mainsail.
 ### Releasing
 
 Set the version in `Cargo.toml`, commit and push a matching tag (`git tag v0.3.0 && git push --tags`).
-The release workflow builds the binaries (cross-compiled in Debian bookworm) and publishes them;
+The release workflow builds the binaries (cross-compiled in Debian bullseye, for glibc 2.31 and newer) and publishes them;
 Moonraker then offers the update. **Actions → Build → Run workflow** builds them without releasing.
 
 ### Building on the Pi
