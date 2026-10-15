@@ -1,5 +1,5 @@
 import { Theme } from "../theme.slint";
-import { Overlay, Network, Strings, WifiNetwork } from "../state.slint";
+import { Overlay, Network, Strings, WifiNetwork, Screensaver } from "../state.slint";
 import { Btn, BtnKind, Card, Caption, Bar, SettingRow } from "../widgets.slint";
 import { ListView } from "std-widgets.slint";
 
@@ -53,6 +53,7 @@ component WifiRow inherits Rectangle {
         background: Theme.border;
     }
     ta := TouchArea {
+        pointer-event(e) => { if (e.kind == PointerEventKind.down) { Screensaver.activity(); } }
         enabled: root.enabled;
         clicked => { root.clicked(); }
     }
@@ -92,7 +93,8 @@ export component NetworkPage inherits Rectangle {
             vertical-stretch: 1;
 
             Card {
-                horizontal-stretch: 1;
+                // The Wi-Fi card's buttons would otherwise squeeze this one
+                width: (root.width - 3 * Theme.gap) * 0.42;
                 VerticalLayout {
                     padding: 14px;
                     spacing: 10px;
@@ -156,18 +158,12 @@ export component NetworkPage inherits Rectangle {
                     spacing: 8px;
                     HorizontalLayout {
                         spacing: 8px;
-                        VerticalLayout {
-                            alignment: center;
+                        Text {
+                            text: "Wi-Fi";
+                            color: Theme.text;
+                            font-weight: 600;
+                            vertical-alignment: center;
                             horizontal-stretch: 1;
-                            Text { text: "Wi-Fi"; color: Theme.text; font-weight: 600; }
-                            Caption {
-                                text: !Network.wifi-present ? @tr("no adapter")
-                                    : Network.wifi-state == "connected"
-                                        ? Network.wifi-ssid + (Network.wifi-ip != "" ? " · " + Network.wifi-ip : "")
-                                    : Strings.wifi-state(Network.wifi-state);
-                                color: Network.wifi-state == "connected" ? Theme.accent : Theme.text-dim;
-                                overflow: elide;
-                            }
                         }
                         Btn {
                             text: @tr("Hidden network");
@@ -184,6 +180,15 @@ export component NetworkPage inherits Rectangle {
                             enabled: Network.wifi-present && !Network.scanning;
                             clicked => { Network.scan(); }
                         }
+                    }
+
+                    Caption {
+                        text: !Network.wifi-present ? @tr("no adapter")
+                            : Network.wifi-state == "connected"
+                                ? Network.wifi-ssid + (Network.wifi-ip != "" ? " · " + Network.wifi-ip : "")
+                            : Strings.wifi-state(Network.wifi-state);
+                        color: Network.wifi-state == "connected" ? Theme.accent : Theme.text-dim;
+                        overflow: elide;
                     }
 
                     if !Network.wifi-present: VerticalLayout {

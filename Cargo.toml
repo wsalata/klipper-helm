@@ -21,15 +21,15 @@ serde_json = "1"
 toml = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 anyhow = "1"
-# Thumbnails (HTTP from Moonraker) and updates (HTTPS from GitHub, rustls with built-in roots); PNG decoding
-ureq = { version = "3", default-features = false, features = ["rustls"] }
+# Thumbnails: HTTP from Moonraker on the local network (no TLS), PNG decoding
+ureq = { version = "3", default-features = false }
 png = "0.18"
 
 [features]
 default = ["desktop"]
 # Panel in a window on a PC (X11/Wayland) with GPU rendering and accessibility
 desktop = ["slint/backend-default", "slint/renderer-femtovg", "slint/accessibility"]
-# Embedded image (buildroot/): KMS + software renderer only, build with
+# Release build for the printer's computer (Raspberry Pi): KMS + software renderer only,
 # `--no-default-features --features embedded`
 embedded = []
 

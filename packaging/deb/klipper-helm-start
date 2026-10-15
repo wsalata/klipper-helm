@@ -1,0 +1,20 @@
+#!/bin/sh
+# Starts the panel from klipper-helm.service. Settings: /etc/default/klipper-helm.
+
+# Draws directly through DRM/KMS with the software renderer (no X11/Wayland, no GPU)
+: "${SLINT_BACKEND:=linuxkms-software}"
+export SLINT_BACKEND
+
+# Scale the UI (designed for 800x480) to fill the screen: 1024x600 -> 1.25,
+# 1280x720 -> 1.5. Uses the preferred mode of the first connected display.
+if [ -z "$SLINT_SCALE_FACTOR" ]; then
+	for c in /sys/class/drm/card*-*; do
+		[ "$(cat "$c/status" 2>/dev/null)" = connected ] || continue
+		mode=$(head -n 1 "$c/modes")
+		[ -n "$mode" ] && export SLINT_SCALE_FACTOR=$(echo "$mode" | awk -Fx \
+			'{ s = $1 / 800; if ($2 / 480 < s) s = $2 / 480; if (s < 1) s = 1; printf "%.2f", s }')
+		break
+	done
+fi
+
+exec /usr/bin/klipper-helm

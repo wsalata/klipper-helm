@@ -43,9 +43,6 @@ msgstr "Menu"
 msgid "Emergency stop"
 msgstr "Zatrzymanie awaryjne"
 
-msgid "Off"
-msgstr "Wył."
-
 msgid "Cancel"
 msgstr "Anuluj"
 
@@ -343,45 +340,6 @@ msgstr "Presety"
 msgid "Heaters off"
 msgstr "Wyłącz grzanie"
 
-msgid "Installed version"
-msgstr "Zainstalowana wersja"
-
-msgid "System partition"
-msgstr "Partycja systemu"
-
-msgid "Checking for updates..."
-msgstr "Sprawdzanie aktualizacji..."
-
-msgid "This is the latest version."
-msgstr "To najnowsza wersja."
-
-msgid "Version {} is available."
-msgstr "Dostępna jest wersja {}."
-
-msgid "Downloading version {}..."
-msgstr "Pobieranie wersji {}..."
-
-msgid "Installing version {}... Do not switch off the device."
-msgstr "Instalowanie wersji {}... Nie wyłączaj urządzenia."
-
-msgid "Version {} is installed. Restart to use it."
-msgstr "Wersja {} jest zainstalowana. Uruchom ponownie, aby jej używać."
-
-msgid "Update failed: {}"
-msgstr "Aktualizacja nie powiodła się: {}"
-
-msgid "The update is installed next to the current system. If the new system does not start, the panel returns to the current one."
-msgstr "Aktualizacja instaluje się obok obecnego systemu. Jeśli nowy system nie wystartuje, panel wróci do obecnego."
-
-msgid "Updates can only be installed on the panel's own system; here they are only checked."
-msgstr "Aktualizacje można instalować tylko w systemie panelu; tutaj są jedynie sprawdzane."
-
-msgid "Check for updates"
-msgstr "Sprawdź aktualizacje"
-
-msgid "Download and install"
-msgstr "Pobierz i zainstaluj"
-
 msgid "Connecting..."
 msgstr "Łączenie..."
 
@@ -435,9 +393,6 @@ msgstr "Dysza"
 
 msgid "Bed"
 msgstr "Stół"
-
-msgid "Wi-Fi service not running"
-msgstr "Usługa Wi-Fi nie działa"
 
 msgid "Not connected"
 msgstr "Nie połączono"
@@ -493,9 +448,6 @@ msgstr "Zmniejsz: {}"
 msgid "Increase {}"
 msgstr "Zwiększ: {}"
 
-msgid "No releases found. The repository may have no releases yet, or it is private and needs a token (update_token in the config file)."
-msgstr "Nie znaleziono wydań. Repozytorium może nie mieć jeszcze wydań albo jest prywatne i wymaga tokenu (update_token w pliku konfiguracji)."
-
 msgid "Z calibration"
 msgstr "Kalibracja Z"
 
@@ -537,3 +489,108 @@ msgstr "Przerwij"
 
 msgid "Accept"
 msgstr "Zatwierdź"
+
+msgid "Bed mesh"
+msgstr "Siatka stołu"
+
+msgid "Calibration"
+msgstr "Kalibracja"
+
+msgid "Name of the new mesh profile"
+msgstr "Nazwa nowego profilu siatki"
+
+msgid "No mesh loaded"
+msgstr "Brak wczytanej siatki"
+
+msgid "Profile: {}"
+msgstr "Profil: {}"
+
+msgid "Range: {}"
+msgstr "Rozrzut: {}"
+
+msgid "Lowest: {}"
+msgstr "Najniżej: {}"
+
+msgid "Highest: {}"
+msgstr "Najwyżej: {}"
+
+msgid "Heat the bed to printing temperature, then press Calibrate. The printer homes if needed and probes the bed; the result is kept as the \"default\" profile."
+msgstr "Nagrzej stół do temperatury druku i naciśnij Kalibruj. Drukarka w razie potrzeby wykona bazowanie i zmierzy stół; wynik trafi do profilu \"default\"."
+
+msgid "Bed mesh is not configured in Klipper ([bed_mesh] section)."
+msgstr "Siatka stołu nie jest skonfigurowana w Klipperze (sekcja [bed_mesh])."
+
+msgid "Calibrate"
+msgstr "Kalibruj"
+
+msgid "New profile"
+msgstr "Nowy profil"
+
+msgid "Profiles"
+msgstr "Profile"
+
+msgid "No saved profiles"
+msgstr "Brak zapisanych profili"
+
+msgid "Load profile {}"
+msgstr "Wczytaj profil {}"
+
+msgid "Delete the mesh profile {}?"
+msgstr "Usunąć profil siatki {}?"
+
+msgid "Unload mesh"
+msgstr "Wyłącz siatkę"
+
+msgid "Screen saver"
+msgstr "Wygaszacz ekranu"
+
+msgid "Off"
+msgstr "Wył."
+
+msgid "{} min"
+msgstr "{} min"
+
+msgid "Wi-Fi is off or not managed by NetworkManager"
+msgstr "Wi-Fi jest wyłączone albo nie zarządza nim NetworkManager"
+
+msgid "System packages"
+msgstr "Pakiety systemowe"
+
+msgid "{} packages to update"
+msgstr "Pakiety do aktualizacji: {}"
+
+msgid "Up to date"
+msgstr "Aktualne"
+
+msgid "{} · installation not recognised, see Mainsail"
+msgstr "{} · instalacja nierozpoznana, zobacz w Mainsailu"
+
+msgid "{} · update available"
+msgstr "{} · dostępna aktualizacja"
+
+msgid "{} · up to date"
+msgstr "{} · aktualne"
+
+msgid "Update"
+msgstr "Aktualizuj"
+
+msgid "Klipper Helm {}"
+msgstr "Klipper Helm {}"
+
+msgid "Working..."
+msgstr "Trwa praca..."
+
+msgid "Updates are not possible while printing."
+msgstr "Aktualizacje są niedostępne w trakcie druku."
+
+msgid "Moonraker's update manager is not available."
+msgstr "Menedżer aktualizacji Moonrakera jest niedostępny."
+
+msgid "Check"
+msgstr "Sprawdź"
+
+msgid "Update all"
+msgstr "Aktualizuj wszystko"
+
+msgid "Update everything? Klipper and Moonraker restart during the update."
+msgstr "Zaktualizować wszystko? Klipper i Moonraker zrestartują się w trakcie aktualizacji."

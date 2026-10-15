@@ -1,5 +1,5 @@
 import { Theme } from "../theme.slint";
-import { Printer, Actions, Overlay, Heater, Strings } from "../state.slint";
+import { Printer, Actions, Overlay, Heater, Strings, Screensaver } from "../state.slint";
 import { Btn, BtnKind, Card, Caption, Bar } from "../widgets.slint";
 import { ScrollView } from "std-widgets.slint";
 
@@ -49,6 +49,7 @@ component HeaterRow inherits Rectangle {
     }
 
     ta := TouchArea {
+        pointer-event(e) => { if (e.kind == PointerEventKind.down) { Screensaver.activity(); } }
         enabled: root.heater.settable;
         clicked => { Overlay.edit-temp(root.heater); }
     }

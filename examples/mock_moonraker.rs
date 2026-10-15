@@ -51,6 +51,37 @@ struct Sim {
     probe_lower: Option<f64>,
     probe_upper: Option<f64>,
     save_pending: bool,
+    mesh_profile: String,
+    mesh_profiles: Vec<String>,
+    mesh_seed: f64,
+    /// Update manager: (name, version, remote version)
+    updates: Vec<(&'static str, String, String)>,
+}
+
+impl Sim {
+    fn update_status(&self) -> Value {
+        let mut info = serde_json::Map::new();
+        for (name, version, remote) in &self.updates {
+            info.insert((*name).into(), json!({ "version": version, "remote_version": remote, "is_valid": true }));
+        }
+        info.insert("system".into(), json!({ "package_count": 4, "package_list": [] }));
+        json!({ "busy": false, "version_info": info })
+    }
+}
+
+/// A slightly warped 5x5 bed mesh; the seed changes it a little per calibration.
+fn mock_mesh(seed: f64) -> Vec<Vec<f64>> {
+    (0..5)
+        .map(|y| {
+            (0..5)
+                .map(|x| {
+                    let (fx, fy) = (x as f64 - 2.0, y as f64 - 2.0);
+                    let v = 0.012 * (fx * fx + fy * fy) - 0.06 + 0.025 * fx - 0.015 * fy + 0.01 * (seed + x as f64 * y as f64).sin();
+                    (v * 1000.0).round() / 1000.0
+                })
+                .collect()
+        })
+        .collect()
 }
 
 impl Sim {
@@ -101,6 +132,11 @@ impl Sim {
                 "z_position_upper": self.probe_upper,
             },
             "configfile": { "save_config_pending": self.save_pending },
+            "bed_mesh": {
+                "profile_name": self.mesh_profile,
+                "probed_matrix": if self.mesh_profile.is_empty() { json!([[]]) } else { json!(mock_mesh(self.mesh_seed)) },
+                "profiles": self.mesh_profiles.iter().map(|p| (p.clone(), json!({}))).collect::<serde_json::Map<_, _>>(),
+            },
         })
     }
 }
@@ -130,6 +166,15 @@ async fn client(stream: TcpStream) -> anyhow::Result<()> {
         probe_lower: probing.then_some(1.1),
         probe_upper: probing.then_some(1.2),
         save_pending: false,
+        mesh_profile: "default".into(),
+        mesh_profiles: vec!["default".into(), "pei_60C".into()],
+        mesh_seed: 0.0,
+        updates: vec![
+            ("klipper", "v0.13.0-120".into(), "v0.13.0-131".into()),
+            ("moonraker", "v0.9.3-40".into(), "v0.9.3-40".into()),
+            ("mainsail", "v2.14.0".into(), "v2.14.0".into()),
+            ("klipper-helm", "v0.2.1".into(), "v0.3.0".into()),
+        ],
     };
     let mut tick = tokio::time::interval(Duration::from_millis(500));
 
@@ -155,7 +200,7 @@ async fn client(stream: TcpStream) -> anyhow::Result<()> {
                     "printer.objects.list" => json!({ "objects": [
                         "webhooks", "configfile", "extruder", "heater_bed", "temperature_sensor raspberry_pi",
                         "fan", "heater_fan hotend_fan", "print_stats", "virtual_sdcard", "display_status",
-                        "toolhead", "gcode_move", "idle_timeout", "probe", "bltouch", "manual_probe",
+                        "toolhead", "gcode_move", "idle_timeout", "probe", "bltouch", "manual_probe", "bed_mesh",
                         "gcode_macro PRINT_START", "gcode_macro PRINT_END", "gcode_macro LOAD_FILAMENT",
                         "gcode_macro UNLOAD_FILAMENT", "gcode_macro _HELPER", "gcode_macro BED_MESH_CALIBRATE_FAST",
                         "gcode_macro PARK", "gcode_macro M600",
@@ -205,6 +250,19 @@ async fn client(stream: TcpStream) -> anyhow::Result<()> {
                                 Some("ACCEPT") if sim.probe_active => { sim.probe_active = false; sim.save_pending = true; }
                                 Some("ABORT") => sim.probe_active = false,
                                 Some("SAVE_CONFIG") => sim.save_pending = false,
+                                Some("BED_MESH_CALIBRATE") => {
+                                    let name = words.next().and_then(|w| w.strip_prefix("PROFILE=")).unwrap_or("default").to_string();
+                                    if !sim.mesh_profiles.contains(&name) { sim.mesh_profiles.push(name.clone()); }
+                                    sim.mesh_profile = name;
+                                    sim.mesh_seed += 1.0;
+                                    sim.save_pending = true;
+                                }
+                                Some("BED_MESH_PROFILE") => match words.next().and_then(|w| w.split_once('=')) {
+                                    Some(("LOAD", name)) if sim.mesh_profiles.iter().any(|p| p == name) => sim.mesh_profile = name.into(),
+                                    Some(("REMOVE", name)) => { sim.mesh_profiles.retain(|p| p != name); sim.save_pending = true; }
+                                    _ => {}
+                                },
+                                Some("BED_MESH_CLEAR") => sim.mesh_profile.clear(),
                                 Some("FAIL") => {
                                     let err = json!({ "jsonrpc": "2.0", "id": id, "error": { "code": 400, "message": "Unknown command:\"FAIL\"" } });
                                     tx.send(Message::text(err.to_string())).await?;
@@ -214,6 +272,20 @@ async fn client(stream: TcpStream) -> anyhow::Result<()> {
                             }
                             notifications.push(json!({ "jsonrpc": "2.0", "method": "notify_gcode_response", "params": [format!("// mock: {line}")] }));
                         }
+                        json!("ok")
+                    }
+                    "machine.update.status" | "machine.update.refresh" => sim.update_status(),
+                    "machine.update.upgrade" => {
+                        let name = req["params"]["name"].as_str().unwrap_or("").to_string();
+                        for (n, version, remote) in sim.updates.iter_mut() {
+                            if name.is_empty() || *n == name {
+                                notifications.push(json!({ "jsonrpc": "2.0", "method": "notify_update_response",
+                                    "params": [{ "application": n, "proc_id": 1, "message": format!("Updating {n}..."), "complete": false }] }));
+                                *version = remote.clone();
+                            }
+                        }
+                        notifications.push(json!({ "jsonrpc": "2.0", "method": "notify_update_response",
+                            "params": [{ "application": name, "proc_id": 1, "message": "Update complete", "complete": true }] }));
                         json!("ok")
                     }
                     "printer.print.pause" => { sim.state = "paused"; json!("ok") }

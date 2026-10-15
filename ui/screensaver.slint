@@ -1,0 +1,65 @@
+import { Theme } from "theme.slint";
+import { Printer, Screensaver, Strings } from "state.slint";
+import { Bar } from "widgets.slint";
+
+// Dark screen with a dimmed clock and the print state. The block moves every minute
+// so nothing stays lit in one place. A touch only wakes the screen; the click does
+// not reach the screens below.
+export component ScreensaverView inherits Rectangle {
+    background: #000000;
+    property <int> step;
+    property <color> dim: #6B7A90;
+
+    Timer {
+        interval: 60s;
+        running: true;
+        triggered => { root.step += 1; }
+    }
+
+    block := VerticalLayout {
+        // Pseudo-random positions from the step counter
+        x: (root.width - self.width) * mod(root.step * 37 + 50, 100) / 100;
+        y: (root.height - self.height) * mod(root.step * 61 + 50, 100) / 100;
+        width: 360px;
+        height: self.preferred-height;
+        spacing: 6px;
+
+        Text {
+            text: Printer.clock;
+            color: root.dim;
+            font-family: Theme.display;
+            font-size: 96px;
+            horizontal-alignment: center;
+        }
+        if Printer.printing: Text {
+            text: Printer.job.filename;
+            color: root.dim;
+            font-size: Theme.font-s;
+            horizontal-alignment: center;
+            overflow: elide;
+        }
+        if Printer.printing: Bar {
+            value: Printer.job.progress;
+            fill: Printer.job.state == "paused" ? Theme.warn.darker(40%) : Theme.accent.darker(50%);
+        }
+        if Printer.printing: Text {
+            text: Printer.job.eta-clock != ""
+                ? round(Printer.job.progress * 100) + "% · " + @tr("finishes around {}", Printer.job.eta-clock)
+                : round(Printer.job.progress * 100) + "%";
+            color: root.dim;
+            font-size: Theme.font-m;
+            horizontal-alignment: center;
+        }
+        if !Printer.printing: Text {
+            text: Printer.hostname + " · " + Strings.status(Printer.status);
+            color: root.dim;
+            font-size: Theme.font-m;
+            horizontal-alignment: center;
+            overflow: elide;
+        }
+    }
+
+    TouchArea {
+        clicked => { Screensaver.wake(); }
+    }
+}

@@ -3,7 +3,7 @@
 use crate::config::Config;
 use crate::printer::{self, Objects, PrinterModel};
 use crate::thumbs::{Size, Thumbs};
-use crate::{AppWindow, Conn, ConsoleLine, Status, bridge};
+use crate::{AppWindow, Conn, ConsoleLine, Status, bridge, updates};
 use anyhow::bail;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
@@ -32,6 +32,8 @@ pub enum Command {
     Extrude(f32, f32),
     /// Z offset calibration: "probe" or "endstop"
     CalibrateZ(String),
+    /// New bed mesh, saved under this profile name ("" for "default")
+    CalibrateMesh(String),
     Pause,
     Resume,
     Cancel,
@@ -45,6 +47,10 @@ pub enum Command {
     HostShutdown,
     /// New settings from the panel; a changed address means reconnecting
     Reconfigure(Config),
+    /// Update manager: look for new versions
+    UpdateRefresh,
+    /// Update manager: install one component ("" for all)
+    Upgrade(String),
 }
 
 /// What a request is waiting for, so we know how to handle the response.
@@ -61,6 +67,10 @@ enum Pending {
     JobMeta(String),
     /// Metadata needed only for the thumbnail in the file list
     ListMeta(String),
+    UpdateStatus,
+    /// `machine.update.refresh` answers with the new status
+    UpdateRefresh,
+    UpdateAction,
 }
 
 enum Exit {
@@ -184,6 +194,7 @@ impl<'a> Session<'a> {
         self.call("printer.info", json!({}), Pending::PrinterInfo).await?;
         self.call("server.gcode_store", json!({ "count": 100 }), Pending::GcodeStore).await?;
         self.call("server.files.list", json!({ "root": "gcodes" }), Pending::FileList).await?;
+        self.call("machine.update.status", json!({}), Pending::UpdateStatus).await?;
         self.push_state();
 
         let mut tick = tokio::time::interval(RETRY);
@@ -271,6 +282,16 @@ impl<'a> Session<'a> {
                 self.push_state();
                 self.call("printer.info", json!({}), Pending::PrinterInfo).await?;
             }
+            "notify_update_refreshed" => bridge::updates(&self.ui, updates::parse_status(&params[0])),
+            "notify_update_response" => {
+                let r = &params[0];
+                let message = updates::last_line(r.get("message").and_then(Value::as_str).unwrap_or(""));
+                let complete = r.get("complete").and_then(Value::as_bool).unwrap_or(false);
+                bridge::update_progress(&self.ui, message, complete);
+                if complete {
+                    self.call("machine.update.status", json!({}), Pending::UpdateStatus).await?;
+                }
+            }
             "notify_filelist_changed" => {
                 self.call("server.files.list", json!({ "root": "gcodes" }), Pending::FileList).await?;
             }
@@ -339,6 +360,8 @@ impl<'a> Session<'a> {
                 }
             }
             Pending::ListMeta(path) => self.fetch_thumb(&path, result, Size::Small),
+            Pending::UpdateStatus | Pending::UpdateRefresh => bridge::updates(&self.ui, updates::parse_status(result)),
+            Pending::UpdateAction => {}
             Pending::FileMeta(path) => {
                 bridge::details(&self.ui, printer::file_details(&path, result));
                 self.fetch_thumb(&path, result, Size::Large);
@@ -376,6 +399,9 @@ impl<'a> Session<'a> {
                 eprintln!("Moonraker: {msg}");
             }
             Pending::Action => bridge::toast(&self.ui, msg),
+            // No [update_manager] in moonraker.conf: the screen says so
+            Pending::UpdateStatus => eprintln!("Moonraker: update status: {msg}"),
+            Pending::UpdateRefresh | Pending::UpdateAction => bridge::update_error(&self.ui, msg),
         }
     }
 
@@ -411,6 +437,16 @@ impl<'a> Session<'a> {
                     Some(g) => self.gcode(g).await,
                     None => Ok(()),
                 };
+            }
+            Command::CalibrateMesh(profile) => return self.gcode(self.model.bed_mesh_gcode(&profile)).await,
+            Command::UpdateRefresh => {
+                bridge::update_progress(&self.ui, String::new(), false);
+                return self.call("machine.update.refresh", json!({}), Pending::UpdateRefresh).await;
+            }
+            Command::Upgrade(name) => {
+                bridge::update_progress(&self.ui, String::new(), false);
+                let params = if name.is_empty() { json!({}) } else { json!({ "name": name }) };
+                return self.call("machine.update.upgrade", params, Pending::UpdateAction).await;
             }
             Command::Pause => action("printer.print.pause"),
             Command::Resume => action("printer.print.resume"),

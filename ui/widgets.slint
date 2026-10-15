@@ -1,5 +1,5 @@
 import { Theme } from "theme.slint";
-import { Heater, Strings } from "state.slint";
+import { Heater, Strings, Screensaver } from "state.slint";
 
 // danger-outline: a destructive action that is not an emergency (e.g. cancelling a print)
 export enum BtnKind { normal, accent, danger, danger-outline, ghost }
@@ -65,6 +65,7 @@ export component Btn inherits Rectangle {
     }
 
     ta := TouchArea {
+        pointer-event(e) => { if (e.kind == PointerEventKind.down) { Screensaver.activity(); } }
         enabled: root.enabled;
         clicked => { root.clicked(); }
     }
@@ -234,5 +235,8 @@ export component SettingRow inherits Rectangle {
             horizontal-stretch: 1;
         }
     }
-    ta := TouchArea { clicked => { root.clicked(); } }
+    ta := TouchArea {
+        pointer-event(e) => { if (e.kind == PointerEventKind.down) { Screensaver.activity(); } }
+        clicked => { root.clicked(); }
+    }
 }

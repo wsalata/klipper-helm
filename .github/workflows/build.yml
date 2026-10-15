@@ -1,0 +1,77 @@
+# Builds the panel for the printer's computer: Raspberry Pi OS 64-bit (arm64) and 32-bit
+# (armhf), and x86-64. Cross-compiled in Debian bookworm, so the binaries need glibc 2.36
+# (Raspberry Pi OS bookworm or newer). Run by the release workflow, or by hand
+# (Actions > Build > Run workflow) to test a build.
+name: Build
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version built into the binary ("v0.3.0")
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version built into the binary, e.g. v0.3.0-test1
+        type: string
+        required: true
+
+jobs:
+  binary:
+    runs-on: ubuntu-24.04
+    container: debian:bookworm
+    strategy:
+      matrix:
+        include:
+          - arch: arm64
+            target: aarch64-unknown-linux-gnu
+            triplet: aarch64-linux-gnu
+            cross: crossbuild-essential-arm64
+          - arch: armhf
+            target: armv7-unknown-linux-gnueabihf
+            triplet: arm-linux-gnueabihf
+            cross: crossbuild-essential-armhf
+          - arch: amd64
+            target: x86_64-unknown-linux-gnu
+            triplet: x86_64-linux-gnu
+            cross: ""
+    env:
+      KLIPPER_HELM_RELEASE_VERSION: ${{ inputs.version }}
+      PKG_CONFIG_ALLOW_CROSS: "1"
+      PKG_CONFIG_LIBDIR: /usr/lib/${{ matrix.triplet }}/pkgconfig:/usr/share/pkgconfig
+      CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+      CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER: arm-linux-gnueabihf-gcc
+      CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
+      CC_armv7_unknown_linux_gnueabihf: arm-linux-gnueabihf-gcc
+    steps:
+      - name: Install the toolchain and the target's libraries
+        run: |
+          dpkg --add-architecture ${{ matrix.arch }}
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl git build-essential \
+            pkg-config ${{ matrix.cross }} \
+            libinput-dev:${{ matrix.arch }} libxkbcommon-dev:${{ matrix.arch }} \
+            libudev-dev:${{ matrix.arch }} libfontconfig-dev:${{ matrix.arch }}
+
+      - uses: actions/checkout@v5
+
+      - name: Install Rust
+        run: |
+          curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --target ${{ matrix.target }}
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Build the panel
+        run: |
+          cargo build --release --locked --no-default-features --features embedded \
+            --target ${{ matrix.target }}
+          mkdir -p dist
+          # install.sh and Moonraker's update manager download exactly this name
+          cp target/${{ matrix.target }}/release/klipper-helm dist/klipper-helm-linux-${{ matrix.arch }}
+          ls -l dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: klipper-helm-linux-${{ matrix.arch }}
+          path: dist/*

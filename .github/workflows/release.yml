@@ -1,6 +1,6 @@
-# Builds the embedded image and the signed update bundle for a version tag (vX.Y.Z)
-# and publishes them as a GitHub release, where panels look for updates.
-# Needs the repository secret RAUC_SIGNING_KEY (content of buildroot/keys/release.key.pem).
+# Publishes a version tag (vX.Y.Z) as a GitHub release with the panel binaries. install.sh
+# installs the latest release, and Moonraker's update manager (type "executable") updates
+# panels from newer ones, so the binary names must not change.
 name: Release
 
 on:
@@ -11,68 +11,40 @@ permissions:
   contents: write
 
 jobs:
-  image:
+  check:
     runs-on: ubuntu-24.04
-    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v5
-
       - name: Check that the tag matches the version in Cargo.toml
         run: |
           version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
           if [ "v$version" != "$GITHUB_REF_NAME" ]; then
-            echo "Tag $GITHUB_REF_NAME does not match Cargo.toml version $version" >&2
+            echo "::error::Tag $GITHUB_REF_NAME does not match Cargo.toml version $version"
             exit 1
           fi
 
-      # A full Buildroot build needs about 25 GB
-      - name: Free disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup \
-            /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/share/swift
-          sudo docker image prune --all --force > /dev/null
-          df -h /
+  build:
+    needs: check
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ github.ref_name }}
 
-      - name: Install Buildroot host tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential bc cpio file rsync unzip wget python3 libncurses-dev
-
-      - name: Cache Buildroot downloads
-        uses: actions/cache@v4
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
         with:
-          path: .buildroot/buildroot-2026.08/dl
-          key: buildroot-dl-${{ hashFiles('Makefile', 'buildroot/configs/*', 'Cargo.lock') }}
-          restore-keys: buildroot-dl-
-
-      - name: Build image and update bundle
-        env:
-          RAUC_SIGNING_KEY: ${{ secrets.RAUC_SIGNING_KEY }}
-        run: |
-          if [ -z "$RAUC_SIGNING_KEY" ]; then
-            echo "::error::The RAUC_SIGNING_KEY secret is missing (Settings > Secrets and variables > Actions)"
-            exit 1
-          fi
-          umask 077
-          printf '%s\n' "$RAUC_SIGNING_KEY" > "$RUNNER_TEMP/release.key.pem"
-          export KLIPPER_HELM_SIGNING_KEY="$RUNNER_TEMP/release.key.pem"
-          export KLIPPER_HELM_RELEASE_VERSION="${GITHUB_REF_NAME#v}"
-          make image
-          rm -f "$RUNNER_TEMP/release.key.pem"
-
-      - name: Collect release files
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          mkdir -p release
-          xz -T0 -9 -c .buildroot/output/images/sdcard.img > "release/klipper-helm-odroidxu4-$version.img.xz"
-          cp .buildroot/output/images/klipper-helm-odroidxu4-$version.raucb release/
-          (cd release && sha256sum * > SHA256SUMS)
-          ls -la release
+          path: release
+          merge-multiple: true
 
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" release/* \
+          cd release
+          sha256sum * > SHA256SUMS
+          ls -la
+          gh release create "$GITHUB_REF_NAME" * --repo "$GITHUB_REPOSITORY" \
             --title "Klipper Helm $GITHUB_REF_NAME" \
             --generate-notes

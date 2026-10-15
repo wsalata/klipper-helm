@@ -1,4 +1,5 @@
-# Copy to ~/.config/klipper-helm/config.toml (or point to it with KLIPPER_HELM_CONFIG).
+# Copy to ~/.config/klipper-helm/config.toml (or point to it with KLIPPER_HELM_CONFIG;
+# install.sh uses ~/printer_data/config/klipper-helm.toml).
 # The panel writes the same file (System → Panel settings).
 # The address in this file wins; MOONRAKER_URL is only used when it is missing here.
 
@@ -7,14 +8,12 @@ moonraker_url = "ws://127.0.0.1:7125/websocket"
 # UI language: "auto" (system locale), "en" or "pl"
 language = "auto"
 
-# System updates: GitHub repository with the releases. A private repository also needs
-# a token with read-only access to its contents.
-update_repo = "wsalata/klipper-helm"
-# update_token = "github_pat_..."
-
 # Manual movement speeds [mm/s]
 xy_speed = 100
 z_speed = 10
+
+# Minutes without touches before the screen saver starts (0 = never)
+screensaver_minutes = 5
 
 [[preset]]
 name = "PLA"

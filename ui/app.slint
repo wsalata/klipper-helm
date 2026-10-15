@@ -6,7 +6,7 @@ import "fonts/SairaSemiCondensed-SemiBold.ttf";
 import "fonts/SairaSemiCondensed-Bold.ttf";
 
 import { Theme } from "theme.slint";
-import { Printer, Actions, Overlay, Nav, Conn, Settings, Strings, Messages, Network, Update } from "state.slint";
+import { Printer, Actions, Overlay, Nav, Conn, Status, Settings, Strings, Messages, Network, Update, Screensaver } from "state.slint";
 import { Btn, BtnKind } from "widgets.slint";
 import { NumpadDialog, ConfirmDialog, FileDialog, TextDialog, NotReadyPanel, MenuSheet, TuneSheet } from "dialogs.slint";
 import { DashboardPage } from "pages/dashboard.slint";
@@ -21,8 +21,10 @@ import { SettingsPage } from "pages/settings.slint";
 import { NetworkPage } from "pages/network.slint";
 import { UpdatePage } from "pages/update.slint";
 import { ZCalibratePage } from "pages/zcalibrate.slint";
+import { BedMeshPage } from "pages/bedmesh.slint";
+import { ScreensaverView } from "screensaver.slint";
 
-export { Printer, Actions, Overlay, Nav, Settings, Messages, Network, Update }
+export { Printer, Actions, Overlay, Nav, Settings, Messages, Network, Update, Screensaver }
 
 component Header inherits HorizontalLayout {
     pure function page-title(page: int) -> string {
@@ -37,6 +39,7 @@ component Header inherits HorizontalLayout {
         if (page == 9) { return @tr("Network"); }
         if (page == 10) { return @tr("Updates"); }
         if (page == 11) { return @tr("Z calibration"); }
+        if (page == 12) { return @tr("Bed mesh"); }
         return "";
     }
 
@@ -133,7 +136,16 @@ export component AppWindow inherits Window {
     default-font-size: Theme.font-m;
 
     // Console, System and Settings also work when Klipper is not ready
-    property <bool> blocked: Printer.conn != Conn.ready && (Nav.page < 6 || Nav.page == 11);
+    property <bool> blocked: Printer.conn != Conn.ready && (Nav.page < 6 || Nav.page >= 11);
+
+    // The end of a print and Klipper failures wake the screen
+    property <Status> status: Printer.status;
+    changed status => {
+        if (status == Status.complete || status == Status.print-error || status == Status.cancelled
+            || status == Status.klipper-shutdown || status == Status.klipper-error) {
+            Screensaver.wake();
+        }
+    }
 
     VerticalLayout {
         Header {}
@@ -156,6 +168,7 @@ export component AppWindow inherits Window {
             if Nav.page == 9: NetworkPage { width: 100%; height: 100%; }
             if Nav.page == 10: UpdatePage { width: 100%; height: 100%; }
             if !root.blocked && Nav.page == 11: ZCalibratePage { width: 100%; height: 100%; }
+            if !root.blocked && Nav.page == 12: BedMeshPage { width: 100%; height: 100%; }
           }
         }
     }
@@ -193,4 +206,6 @@ export component AppWindow inherits Window {
             triggered => { Printer.toast = ""; }
         }
     }
+
+    if Screensaver.active: ScreensaverView { width: 100%; height: 100%; }
 }

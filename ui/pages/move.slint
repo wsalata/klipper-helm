@@ -85,20 +85,29 @@ export component MovePage inherits Rectangle {
         }
 
         Card {
-            width: 170px;
+            width: 180px;
             VerticalLayout {
                 padding: Theme.gap;
                 spacing: Theme.gap;
                 Caption { text: @tr("Homing"); }
                 Btn { text: @tr("All"); kind: BtnKind.accent; icon: @image-url("../icons/home.svg"); clicked => { Actions.gcode("G28"); } }
-                Btn { text: "X"; clicked => { Actions.gcode("G28 X"); } }
-                Btn { text: "Y"; clicked => { Actions.gcode("G28 Y"); } }
-                Btn { text: "Z"; clicked => { Actions.gcode("G28 Z"); } }
+                HorizontalLayout {
+                    spacing: 6px;
+                    Btn { text: "X"; clicked => { Actions.gcode("G28 X"); } }
+                    Btn { text: "Y"; clicked => { Actions.gcode("G28 Y"); } }
+                    Btn { text: "Z"; clicked => { Actions.gcode("G28 Z"); } }
+                }
                 Rectangle { vertical-stretch: 1; }
+                Caption { text: @tr("Calibration"); }
                 Btn {
-                    text: @tr("Z calibration");
+                    text: @tr("Z offset");
                     font-size: Theme.font-s;
                     clicked => { Nav.page = 11; }
+                }
+                Btn {
+                    text: @tr("Bed mesh");
+                    font-size: Theme.font-s;
+                    clicked => { Nav.page = 12; }
                 }
                 Btn {
                     text: @tr("Motors off");

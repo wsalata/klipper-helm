@@ -2,7 +2,7 @@
 //! into the structures shown by the UI. Only codes and raw data go to the UI;
 //! translated labels are produced in Slint.
 
-use crate::{Conn, Fan, FileDetails, Heater, PrintJob, Position, Status, ZCalibration};
+use crate::{BedMeshInfo, Conn, Fan, FileDetails, Heater, MeshCell, MeshProfile, PrintJob, Position, Status, ZCalibration};
 use serde_json::{Value, json};
 
 /// Klipper objects discovered via `printer.objects.list`.
@@ -16,6 +16,7 @@ pub struct Objects {
     pub probe: bool,
     /// Klipper's manual probe helper (TESTZ/ACCEPT/ABORT), used by Z calibration
     pub manual_probe: bool,
+    pub bed_mesh: bool,
 }
 
 impl Objects {
@@ -33,6 +34,7 @@ impl Objects {
                 "gcode_macro" if !rest.starts_with('_') => o.macros.push(rest.into()),
                 "probe" => o.probe = true,
                 "manual_probe" => o.manual_probe = true,
+                "bed_mesh" => o.bed_mesh = true,
                 _ => {}
             }
         }
@@ -63,6 +65,9 @@ impl Objects {
         }
         if self.manual_probe {
             objects.insert("manual_probe".into(), Value::Null);
+        }
+        if self.bed_mesh {
+            objects.insert("bed_mesh".into(), Value::Null);
         }
         // Only this field: the whole configfile object holds the full printer config
         objects.insert("configfile".into(), json!(["save_config_pending"]));
@@ -130,16 +135,40 @@ pub fn set_fan_gcode(obj: &str, speed: f32) -> Option<String> {
     }
 }
 
-/// Recursive merge: Moonraker only sends the fields that changed.
+/// Applies a status update. Moonraker sends only the fields that changed, but each
+/// field in full, so fields are replaced (a removed bed mesh profile must disappear).
 pub fn merge(dst: &mut Value, src: &Value) {
-    match (dst, src) {
-        (Value::Object(d), Value::Object(s)) => {
-            for (k, v) in s {
-                merge(d.entry(k.clone()).or_insert(Value::Null), v);
+    let (Value::Object(dst), Value::Object(src)) = (dst, src) else { return };
+    for (object, fields) in src {
+        let entry = dst.entry(object.clone()).or_insert_with(|| json!({}));
+        match (entry, fields) {
+            (Value::Object(d), Value::Object(f)) => {
+                for (k, v) in f {
+                    d.insert(k.clone(), v.clone());
+                }
             }
+            (e, f) => *e = f.clone(),
         }
-        (d, s) => *d = s.clone(),
     }
+}
+
+/// Mesh data for the UI: summary, cells (back row first, as seen from the front of the
+/// printer) and profiles.
+pub struct MeshData {
+    pub info: BedMeshInfo,
+    pub cells: Vec<MeshCell>,
+    pub profiles: Vec<MeshProfile>,
+}
+
+/// Blue below zero, teal at zero, orange above; `t` is -1..1.
+fn mesh_color(t: f64) -> slint::Color {
+    const LOW: [f64; 3] = [77.0, 141.0, 255.0];
+    const MID: [f64; 3] = [46.0, 196.0, 182.0];
+    const HIGH: [f64; 3] = [255.0, 138.0, 61.0];
+    let t = t.clamp(-1.0, 1.0);
+    let (to, k) = if t < 0.0 { (LOW, -t) } else { (HIGH, t) };
+    let c = |i: usize| (MID[i] + (to[i] - MID[i]) * k).round() as u8;
+    slint::Color::from_rgb_u8(c(0), c(1), c(2))
 }
 
 /// Everything sent to the UI after each state update.
@@ -158,6 +187,7 @@ pub struct Snapshot {
     /// Speed of the part cooling fan ("fan"), if the printer has one
     pub part_fan: Option<f32>,
     pub calibration: ZCalibration,
+    pub mesh: MeshData,
 }
 
 #[derive(Default)]
@@ -311,6 +341,79 @@ impl PrinterModel {
         }
     }
 
+    fn mesh(&self) -> MeshData {
+        let active = self.s("/bed_mesh/profile_name");
+        let matrix: Vec<Vec<f64>> = self
+            .status
+            .pointer("/bed_mesh/probed_matrix")
+            .and_then(Value::as_array)
+            .map(|rows| {
+                rows.iter()
+                    .map(|r| r.as_array().into_iter().flatten().filter_map(Value::as_f64).collect())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let cols = matrix.first().map_or(0, Vec::len);
+        // Klipper keeps the old matrix around in some versions; only show a loaded mesh
+        let matrix = if active.is_empty() || cols == 0 || matrix.iter().any(|r| r.len() != cols) {
+            Vec::new()
+        } else {
+            matrix
+        };
+        let values = || matrix.iter().flatten().copied();
+        let (min, max) = values().fold((f64::MAX, f64::MIN), |(lo, hi), v| (lo.min(v), hi.max(v)));
+        let scale = min.abs().max(max.abs()).max(0.01);
+        // Row 0 is the front of the bed (mesh_min Y); draw it at the bottom
+        let cells = matrix
+            .iter()
+            .rev()
+            .flatten()
+            .map(|&v| MeshCell { value: format!("{v:+.3}").into(), color: mesh_color(v / scale) })
+            .collect();
+
+        let mut profiles: Vec<MeshProfile> = self
+            .status
+            .pointer("/bed_mesh/profiles")
+            .and_then(Value::as_object)
+            .map(|p| {
+                p.keys().map(|name| MeshProfile { name: name.as_str().into(), active: name == active }).collect()
+            })
+            .unwrap_or_default();
+        profiles.sort_by(|a, b| (a.name != "default", &a.name).cmp(&(b.name != "default", &b.name)));
+
+        let found = !matrix.is_empty();
+        let mm = |v: f64| if found { format!("{v:+.3} mm") } else { "-".into() };
+        MeshData {
+            info: BedMeshInfo {
+                available: self.objects.bed_mesh,
+                profile: active.into(),
+                cols: if found { cols as i32 } else { 0 },
+                rows: matrix.len() as i32,
+                min: mm(min).into(),
+                max: mm(max).into(),
+                range: if found { format!("{:.3} mm", max - min) } else { "-".into() }.into(),
+            },
+            cells,
+            profiles,
+        }
+    }
+
+    /// Probes a new bed mesh, homing first if needed. Klipper stores it as `profile`
+    /// ("default" when empty) and waits for SAVE_CONFIG to keep it.
+    pub fn bed_mesh_gcode(&self, profile: &str) -> String {
+        let profile: String = profile.trim().chars().map(|c| if c.is_whitespace() { '_' } else { c }).collect();
+        let mut script = String::new();
+        let homed = self.s("/toolhead/homed_axes");
+        if !(homed.contains('x') && homed.contains('y') && homed.contains('z')) {
+            script.push_str("G28\n");
+        }
+        script.push_str("BED_MESH_CALIBRATE");
+        if !profile.is_empty() && profile != "default" {
+            script.push_str(&format!(" PROFILE={profile}"));
+        }
+        script
+    }
+
     /// Starts Z calibration like KlipperScreen: homes if needed, moves the nozzle over the
     /// middle of the bed and runs Klipper's calibration helper, which then waits for
     /// TESTZ/ACCEPT/ABORT. `method` is "probe" (PROBE_CALIBRATE) or "endstop".
@@ -399,6 +502,7 @@ impl PrinterModel {
             job: self.job(),
             position,
             calibration: self.calibration(),
+            mesh: self.mesh(),
         }
     }
 }
@@ -505,6 +609,45 @@ mod tests {
         m.status["toolhead"]["homed_axes"] = json!("xyz");
         assert!(m.calibrate_z_gcode("endstop", 100.0, 10.0).unwrap().starts_with("G90\n"));
         assert_eq!(m.calibrate_z_gcode("other", 100.0, 10.0), None);
+    }
+
+    #[test]
+    fn merge_replaces_fields() {
+        let mut status = json!({ "bed_mesh": { "profile_name": "a", "profiles": { "a": {}, "b": {} } } });
+        merge(&mut status, &json!({ "bed_mesh": { "profiles": { "a": {} } }, "fan": { "speed": 1.0 } }));
+        assert_eq!(status, json!({ "bed_mesh": { "profile_name": "a", "profiles": { "a": {} } }, "fan": { "speed": 1.0 } }));
+    }
+
+    #[test]
+    fn bed_mesh() {
+        let mut m = PrinterModel::default();
+        m.objects.bed_mesh = true;
+        m.status = json!({
+            "toolhead": { "homed_axes": "xyz" },
+            "bed_mesh": {
+                "profile_name": "pei",
+                "probed_matrix": [[-0.1, 0.0], [0.05, 0.2]],
+                "profiles": { "pei": {}, "default": {} },
+            },
+        });
+        let mesh = m.mesh();
+        assert_eq!((mesh.info.cols, mesh.info.rows), (2, 2));
+        assert_eq!(mesh.info.range, "0.300 mm");
+        // Back row (last in the matrix) first
+        let values: Vec<_> = mesh.cells.iter().map(|c| c.value.to_string()).collect();
+        assert_eq!(values, ["+0.050", "+0.200", "-0.100", "+0.000"]);
+        assert_eq!(mesh.cells[1].color, mesh_color(1.0));
+        let names: Vec<_> = mesh.profiles.iter().map(|p| (p.name.to_string(), p.active)).collect();
+        assert_eq!(names, [("default".into(), false), ("pei".into(), true)]);
+
+        assert_eq!(m.bed_mesh_gcode(""), "BED_MESH_CALIBRATE");
+        assert_eq!(m.bed_mesh_gcode(" glass bed "), "BED_MESH_CALIBRATE PROFILE=glass_bed");
+        m.status["toolhead"]["homed_axes"] = json!("xy");
+        assert_eq!(m.bed_mesh_gcode("default"), "G28\nBED_MESH_CALIBRATE");
+
+        // No loaded mesh: nothing to draw
+        m.status["bed_mesh"]["profile_name"] = json!("");
+        assert!(m.mesh().cells.is_empty());
     }
 
     #[test]

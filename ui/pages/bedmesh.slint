@@ -1,0 +1,138 @@
+import { Theme } from "../theme.slint";
+import { Printer, Actions, Overlay } from "../state.slint";
+import { Btn, BtnKind, Card, Caption } from "../widgets.slint";
+
+// Bed mesh as in KlipperScreen: the loaded mesh as a height map (seen from the front,
+// the back of the bed at the top), probing a new mesh and managing saved profiles.
+export component BedMeshPage inherits Rectangle {
+    HorizontalLayout {
+        padding: Theme.gap;
+        spacing: Theme.gap;
+
+        Card {
+            horizontal-stretch: 1;
+            VerticalLayout {
+                padding: 12px;
+                spacing: 8px;
+                HorizontalLayout {
+                    Caption {
+                        text: Printer.mesh.profile == "" ? @tr("No mesh loaded") : @tr("Profile: {}", Printer.mesh.profile);
+                    }
+                    Caption {
+                        text: Printer.mesh.cols > 0 ? @tr("Range: {}", Printer.mesh.range) : "";
+                        horizontal-alignment: right;
+                    }
+                }
+
+                if Printer.mesh.cols > 0: Rectangle {
+                    vertical-stretch: 1;
+                    property <length> cell-w: self.width / Printer.mesh.cols;
+                    property <length> cell-h: self.height / Printer.mesh.rows;
+                    for cell[i] in Printer.mesh-cells: Rectangle {
+                        x: mod(i, Printer.mesh.cols) * parent.cell-w + 1px;
+                        y: floor(i / Printer.mesh.cols) * parent.cell-h + 1px;
+                        width: parent.cell-w - 2px;
+                        height: parent.cell-h - 2px;
+                        border-radius: 4px;
+                        background: cell.color;
+                        // Values only fit while the cells are big enough
+                        if parent.cell-w >= 52px && parent.cell-h >= 22px: Text {
+                            text: cell.value;
+                            color: Theme.on-accent;
+                            font-size: 12px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+                if Printer.mesh.cols > 0: HorizontalLayout {
+                    Caption { text: @tr("Lowest: {}", Printer.mesh.min); }
+                    Caption { text: @tr("Highest: {}", Printer.mesh.max); horizontal-alignment: right; }
+                }
+
+                if Printer.mesh.cols == 0: Text {
+                    vertical-stretch: 1;
+                    text: Printer.mesh.available
+                        ? @tr("Heat the bed to printing temperature, then press Calibrate. The printer homes if needed and probes the bed; the result is kept as the \"default\" profile.")
+                        : @tr("Bed mesh is not configured in Klipper ([bed_mesh] section).");
+                    color: Theme.text-dim;
+                    font-size: Theme.font-s;
+                    wrap: word-wrap;
+                    vertical-alignment: center;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+
+        Card {
+            width: 300px;
+            VerticalLayout {
+                padding: 12px;
+                spacing: Theme.gap;
+
+                HorizontalLayout {
+                    spacing: Theme.gap;
+                    Btn {
+                        text: @tr("Calibrate");
+                        kind: BtnKind.accent;
+                        enabled: Printer.mesh.available && !Printer.printing;
+                        clicked => { Actions.calibrate-mesh(""); }
+                    }
+                    Btn {
+                        text: @tr("New profile");
+                        font-size: Theme.font-s;
+                        enabled: Printer.mesh.available && !Printer.printing;
+                        clicked => { Overlay.ask-mesh-profile(); }
+                    }
+                }
+
+                Caption { text: @tr("Profiles"); }
+                if Printer.mesh-profiles.length == 0: Text {
+                    text: @tr("No saved profiles");
+                    color: Theme.text-dim;
+                    font-size: Theme.font-s;
+                }
+                Flickable {
+                    vertical-stretch: 1;
+                    content-height: list.preferred-height;
+                    list := VerticalLayout {
+                        alignment: start;
+                        spacing: 6px;
+                        for profile in Printer.mesh-profiles: HorizontalLayout {
+                            spacing: 6px;
+                            Btn {
+                                text: profile.name;
+                                font-size: Theme.font-s;
+                                active: profile.active;
+                                accessible-label: @tr("Load profile {}", profile.name);
+                                clicked => { Actions.gcode("BED_MESH_PROFILE LOAD=" + profile.name); }
+                            }
+                            Btn {
+                                width: 96px;
+                                text: @tr("Delete");
+                                font-size: Theme.font-s;
+                                kind: BtnKind.danger-outline;
+                                clicked => {
+                                    Overlay.ask(@tr("Delete the mesh profile {}?", profile.name), "gcode",
+                                        "BED_MESH_PROFILE REMOVE=" + profile.name);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if Printer.mesh.profile != "": Btn {
+                    text: @tr("Unload mesh");
+                    font-size: Theme.font-s;
+                    kind: BtnKind.ghost;
+                    clicked => { Actions.gcode("BED_MESH_CLEAR"); }
+                }
+                if Printer.calibration.save-pending: Btn {
+                    text: @tr("Save and restart");
+                    kind: BtnKind.accent;
+                    clicked => { Overlay.ask(@tr("Save the configuration and restart Klipper?"), "gcode", "SAVE_CONFIG"); }
+                }
+            }
+        }
+    }
+}

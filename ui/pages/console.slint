@@ -1,5 +1,5 @@
 import { Theme } from "../theme.slint";
-import { Printer, Actions, ConsoleLine, Keys } from "../state.slint";
+import { Printer, Actions, ConsoleLine, Keys, Screensaver } from "../state.slint";
 import { Btn, BtnKind, Card, Caption, CursorText } from "../widgets.slint";
 import { ListView } from "std-widgets.slint";
 
@@ -43,6 +43,7 @@ export component ConsolePage inherits Rectangle {
     // Physical keyboard (e.g. while working on a PC)
     fs := FocusScope {
         key-pressed(e) => {
+            Screensaver.activity();
             // Named keys are already upper case, so this only affects typed letters
             Actions.console-key(Keys.name(e.text).to-uppercase());
             accept
@@ -71,7 +72,10 @@ export component ConsolePage inherits Rectangle {
                         after: Printer.console-after;
                         placeholder: @tr("Type a G-code command...");
                     }
-                    TouchArea { clicked => { fs.focus(); } }
+                    TouchArea {
+                        pointer-event(e) => { if (e.kind == PointerEventKind.down) { Screensaver.activity(); } }
+                        clicked => { fs.focus(); }
+                    }
                 }
                 Btn {
                     text: @tr("Send");

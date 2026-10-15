@@ -51,6 +51,7 @@ pub fn wire(ui: &AppWindow, cfg: Rc<RefCell<Config>>, tx: UnboundedSender<Comman
         s.set_language(cfg.language.as_str().into());
         s.set_xy_speed(cfg.xy_speed);
         s.set_z_speed(cfg.z_speed);
+        s.set_screensaver_minutes(cfg.screensaver_minutes as i32);
         s.set_presets(ModelRc::new(VecModel::from(presets_model(&cfg.presets))));
         s.set_config_path(Config::path().map(|p| p.display().to_string()).unwrap_or_default().into());
         set_error(&s, "", "");
@@ -113,15 +114,12 @@ pub fn wire(ui: &AppWindow, cfg: Rc<RefCell<Config>>, tx: UnboundedSender<Comman
             language: s.get_language().to_string(),
             xy_speed: s.get_xy_speed(),
             z_speed: s.get_z_speed(),
+            screensaver_minutes: s.get_screensaver_minutes().max(0) as u32,
             presets: s
                 .get_presets()
                 .iter()
                 .map(|p| config::Preset { name: p.name.trim().to_string(), extruder: p.extruder, bed: p.bed })
                 .collect(),
-            // Edited on the Network screen / only in the file
-            network: cfg.borrow().network.clone(),
-            update_repo: cfg.borrow().update_repo.clone(),
-            update_token: cfg.borrow().update_token.clone(),
         };
         if let Err(e) = new.validate() {
             set_error(&s, e.code, &e.arg);

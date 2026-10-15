@@ -1,0 +1,13 @@
+# Settings for the Klipper Helm service; restart it after changes:
+#   sudo systemctl restart klipper-helm
+# Everything else (Moonraker address, language, presets...) is set on the panel itself,
+# in System -> Panel settings, and saved to ~/.config/klipper-helm/config.toml.
+
+# Moonraker address used until one is saved in the panel settings
+#MOONRAKER_URL=ws://127.0.0.1:7125/websocket
+
+# Screen rotation: 0, 90, 180 or 270
+#SLINT_KMS_ROTATION=180
+
+# UI scale; by default computed from the screen size (800x480 = 1)
+#SLINT_SCALE_FACTOR=1.25

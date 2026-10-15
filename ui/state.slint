@@ -66,7 +66,7 @@ export struct WifiNetwork {
     signal: float,     // 0..1
     secure: bool,
     current: bool,     // connected now
-    saved: bool,       // known to wpa_supplicant
+    saved: bool,       // a saved NetworkManager connection
 }
 
 export struct Preset {
@@ -110,6 +110,27 @@ export struct ZCalibration {
     save-pending: bool,  // a result waits for SAVE_CONFIG
 }
 
+// Bed mesh: the loaded mesh as coloured cells, and the saved profiles
+export struct BedMeshInfo {
+    available: bool,     // [bed_mesh] is configured
+    profile: string,     // loaded profile, "" when none
+    cols: int,           // 0 when no mesh is loaded
+    rows: int,
+    min: string,
+    max: string,
+    range: string,
+}
+
+export struct MeshCell {
+    value: string,
+    color: color,
+}
+
+export struct MeshProfile {
+    name: string,
+    active: bool,
+}
+
 export global Printer {
     in property <Conn> conn: Conn.connecting;
     in property <Status> status: Status.connecting;
@@ -117,6 +138,7 @@ export global Printer {
     in property <string> status-message;
     in property <string> hostname: "Klipper";
     in property <string> klipper-version;
+    in property <string> panel-version;
     in property <string> moonraker-url;
     in property <string> clock;
 
@@ -132,6 +154,10 @@ export global Printer {
     in property <image> job-thumb;
     in property <Position> position;
     in property <ZCalibration> calibration;
+    in property <BedMeshInfo> mesh;
+    // Back row first, `mesh.cols` per row
+    in property <[MeshCell]> mesh-cells;
+    in property <[MeshProfile]> mesh-profiles;
     in property <float> extruder-temp;
     in property <bool> has-extruder;
     in property <[string]> macros;
@@ -192,7 +218,7 @@ export global Strings {
     public pure function wifi-state(state: string) -> string {
         if (state == "connected") { return @tr("Connected"); }
         if (state == "connecting") { return @tr("Connecting..."); }
-        if (state == "unavailable") { return @tr("Wi-Fi service not running"); }
+        if (state == "unavailable") { return @tr("Wi-Fi is off or not managed by NetworkManager"); }
         return @tr("Not connected");
     }
 
@@ -253,6 +279,8 @@ export global Actions {
     callback extrude(float, float);
     // "probe" or "endstop"
     callback calibrate-z(string);
+    // Profile name, "" for "default"
+    callback calibrate-mesh(string);
     callback pause();
     callback resume();
     callback cancel();
@@ -273,6 +301,8 @@ export global Settings {
     in-out property <float> z-speed;
     // "auto", "en" or "pl"
     in-out property <string> language;
+    // Screen saver idle time, 0 = off
+    in-out property <int> screensaver-minutes;
     in property <[Preset]> presets;
     in property <string> config-path;
     // Validation/save error, translated with Strings.settings-error
@@ -322,24 +352,42 @@ export global Network {
     callback edit-text(string, string);
 }
 
-// System updates (GitHub releases installed with RAUC into the inactive A/B slot)
+// One entry of Moonraker's update manager (as listed in Mainsail)
+export struct UpdateItem {
+    name: string,
+    version: string,
+    remote: string,      // newest version, "" when unknown
+    state: string,       // "up-to-date", "available" or "invalid"
+    packages: int,       // "system": number of OS packages to update
+}
+
+// Updates through Moonraker's update manager: Klipper, Moonraker, Mainsail, this panel
+// and the system packages.
 export global Update {
-    // false on a PC: checking only
-    in property <bool> managed;
-    in property <string> current-version;
-    // "A" or "B" on the panel's own system, "" elsewhere
-    in property <string> slot;
-    // "idle", "checking", "up-to-date", "no-release", "available", "downloading", "installing",
-    // "installed", "error"
-    in property <string> state;
-    in property <string> latest-version;
-    in property <string> notes;
-    in property <float> progress;
+    in property <[UpdateItem]> items;
+    // false until Moonraker answered; stays false without an [update_manager] section
+    in property <bool> loaded;
+    // Moonraker is checking or updating
+    in property <bool> busy;
+    // What the running update is doing (Moonraker's last output line)
+    in property <string> message;
     in property <string> error;
 
-    callback check();
-    callback install();
-    callback reboot();
+    callback refresh();
+    // Name from `items`, "" for everything
+    callback upgrade(string);
+}
+
+// Screen saver: shown after the idle time set in the settings (counted in Rust from
+// `activity`, which every touch handler and key handler reports).
+export global Screensaver {
+    in-out property <bool> active;
+    callback activity();
+
+    public function wake() {
+        active = false;
+        activity();
+    }
 }
 
 export global Nav {
@@ -364,7 +412,8 @@ export global Overlay {
 
     in-out property <bool> text-open;
     // "settings", "network", "wifi" (the id is then the SSID to join),
-    // "hidden-ssid" (asks for a hidden network's name) or "hidden-wifi" (its password)
+    // "hidden-ssid" (asks for a hidden network's name), "hidden-wifi" (its password)
+    // or "mesh-profile" (name of a new bed mesh profile)
     in-out property <string> text-purpose;
     in-out property <string> text-title;
     in-out property <string> text-id;
@@ -432,6 +481,11 @@ export global Overlay {
     public function ask-hidden-password(ssid: string) {
         ask-text(ssid, @tr("Password for {} (empty for an open network)", ssid), "");
         text-purpose = "hidden-wifi";
+    }
+
+    public function ask-mesh-profile() {
+        ask-text("", @tr("Name of the new mesh profile"), "");
+        text-purpose = "mesh-profile";
     }
 
     public function open-file(path: string) {

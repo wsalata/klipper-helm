@@ -1,10 +1,58 @@
 import { Theme } from "../theme.slint";
-import { Update } from "../state.slint";
-import { Btn, BtnKind, Card, Caption, Bar, InfoRow } from "../widgets.slint";
+import { Printer, Update, UpdateItem, Overlay } from "../state.slint";
+import { Btn, BtnKind, Card, Caption } from "../widgets.slint";
 import { ScrollView } from "std-widgets.slint";
 
+component UpdateRow inherits Rectangle {
+    in property <UpdateItem> item;
+    in property <bool> can-update;
+    height: 60px;
+
+    HorizontalLayout {
+        padding-left: 4px;
+        spacing: 10px;
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+            spacing: 2px;
+            Text {
+                text: root.item.name == "system" ? @tr("System packages") : root.item.name;
+                color: Theme.text;
+                font-weight: 600;
+                overflow: elide;
+            }
+            Caption {
+                text: root.item.name == "system"
+                        ? (root.item.packages > 0 ? @tr("{} packages to update", root.item.packages) : @tr("Up to date"))
+                    : root.item.state == "invalid" ? @tr("{} · installation not recognised, see Mainsail", root.item.version)
+                    : root.item.state == "available" && root.item.remote != "" ? root.item.version + " → " + root.item.remote
+                    : root.item.state == "available" ? @tr("{} · update available", root.item.version)
+                    : @tr("{} · up to date", root.item.version);
+                color: root.item.state == "available" ? Theme.accent
+                    : root.item.state == "invalid" ? Theme.warn
+                    : Theme.text-dim;
+                font-size: Theme.font-s;
+                overflow: elide;
+            }
+        }
+        if root.item.state == "available": Btn {
+            width: 140px;
+            text: @tr("Update");
+            font-size: Theme.font-s;
+            kind: BtnKind.accent;
+            enabled: root.can-update;
+            clicked => { Update.upgrade(root.item.name); }
+        }
+    }
+    Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        background: Theme.border;
+    }
+}
+
 export component UpdatePage inherits Rectangle {
-    property <bool> busy: Update.state == "checking" || Update.state == "downloading" || Update.state == "installing";
+    property <bool> can-update: !Update.busy && !Printer.printing;
 
     VerticalLayout {
         padding: Theme.gap;
@@ -13,73 +61,51 @@ export component UpdatePage inherits Rectangle {
         Card {
             vertical-stretch: 1;
             VerticalLayout {
-                padding: 16px;
-                spacing: 10px;
-
-                InfoRow { label: @tr("Installed version"); value: Update.current-version; }
-                if Update.slot != "": InfoRow { label: @tr("System partition"); value: Update.slot; }
-
-                Text {
-                    text: Update.state == "checking" ? @tr("Checking for updates...")
-                        : Update.state == "up-to-date" ? @tr("This is the latest version.")
-                        : Update.state == "no-release" ? @tr("No releases found. The repository may have no releases yet, or it is private and needs a token (update_token in the config file).")
-                        : Update.state == "available" ? @tr("Version {} is available.", Update.latest-version)
-                        : Update.state == "downloading" ? @tr("Downloading version {}...", Update.latest-version)
-                        : Update.state == "installing" ? @tr("Installing version {}... Do not switch off the device.", Update.latest-version)
-                        : Update.state == "installed" ? @tr("Version {} is installed. Restart to use it.", Update.latest-version)
-                        : Update.state == "error" ? @tr("Update failed: {}", Update.error)
-                        : "";
-                    color: Update.state == "error" ? Theme.danger-text
-                        : Update.state == "available" || Update.state == "installed" ? Theme.accent
-                        : Theme.text;
-                    font-size: Theme.font-m;
-                    wrap: word-wrap;
-                }
-
-                if Update.state == "downloading" || Update.state == "installing": Bar {
-                    height: 12px;
-                    value: Update.progress;
-                }
-
-                // Release notes of the new version
-                if Update.notes != "" && (Update.state == "available" || Update.state == "downloading"
-                        || Update.state == "installing" || Update.state == "installed"): ScrollView {
-                    vertical-stretch: 1;
-                    Text {
-                        text: Update.notes;
-                        color: Theme.text-dim;
-                        font-size: Theme.font-s;
-                        wrap: word-wrap;
-                    }
-                }
-                Rectangle { vertical-stretch: 1; }
-
-                Caption {
-                    text: Update.managed
-                        ? @tr("The update is installed next to the current system. If the new system does not start, the panel returns to the current one.")
-                        : @tr("Updates can only be installed on the panel's own system; here they are only checked.");
-                    wrap: word-wrap;
-                }
+                padding: 14px;
+                spacing: 8px;
 
                 HorizontalLayout {
                     spacing: Theme.gap;
-                    alignment: end;
+                    VerticalLayout {
+                        alignment: center;
+                        horizontal-stretch: 1;
+                        Caption { text: @tr("Klipper Helm {}", Printer.panel-version); }
+                        Text {
+                            text: Update.error != "" ? Update.error
+                                : Update.busy ? (Update.message != "" ? Update.message : @tr("Working..."))
+                                : Printer.printing ? @tr("Updates are not possible while printing.")
+                                : !Update.loaded ? @tr("Moonraker's update manager is not available.")
+                                : "";
+                            color: Update.error != "" ? Theme.danger-text : Theme.text-dim;
+                            font-size: Theme.font-s;
+                            overflow: elide;
+                        }
+                    }
                     Btn {
-                        text: @tr("Check for updates");
+                        width: 160px;
+                        text: @tr("Check");
                         icon: @image-url("../icons/refresh.svg");
-                        enabled: !root.busy && Update.state != "installed";
-                        clicked => { Update.check(); }
+                        font-size: Theme.font-s;
+                        enabled: !Update.busy;
+                        clicked => { Update.refresh(); }
                     }
-                    if Update.state == "available": Btn {
-                        text: @tr("Download and install");
-                        kind: BtnKind.accent;
-                        enabled: Update.managed;
-                        clicked => { Update.install(); }
+                    Btn {
+                        width: 160px;
+                        text: @tr("Update all");
+                        font-size: Theme.font-s;
+                        enabled: root.can-update;
+                        clicked => { Overlay.ask(@tr("Update everything? Klipper and Moonraker restart during the update."), "update", ""); }
                     }
-                    if Update.state == "installed": Btn {
-                        text: @tr("Restart");
-                        kind: BtnKind.accent;
-                        clicked => { Update.reboot(); }
+                }
+
+                ScrollView {
+                    vertical-stretch: 1;
+                    VerticalLayout {
+                        alignment: start;
+                        for item in Update.items: UpdateRow {
+                            item: item;
+                            can-update: root.can-update;
+                        }
                     }
                 }
             }

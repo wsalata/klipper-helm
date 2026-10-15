@@ -1,12 +1,15 @@
 import { Theme } from "theme.slint";
-import { Printer, Actions, Overlay, Nav, Conn, Settings, Strings, Keys, Network } from "state.slint";
+import { Printer, Actions, Overlay, Nav, Conn, Settings, Strings, Keys, Network, Screensaver, Update } from "state.slint";
 import { Btn, BtnKind, Card, Caption, InfoRow, Thumb, CursorText, Stepper } from "widgets.slint";
 
 // Dimmed backdrop that blocks touches to the screen below.
 component Scrim inherits Rectangle {
     callback dismiss();
     background: #050a14c0;
-    TouchArea { clicked => { root.dismiss(); } }
+    TouchArea {
+        pointer-event(e) => { if (e.kind == PointerEventKind.down) { Screensaver.activity(); } }
+        clicked => { root.dismiss(); }
+    }
 }
 
 component Dialog inherits Rectangle {
@@ -112,6 +115,10 @@ export component TextDialog inherits Scrim {
             }
         } else if (Overlay.text-purpose == "hidden-wifi") {
             Network.connect-hidden(Overlay.text-id, value);
+        } else if (Overlay.text-purpose == "mesh-profile") {
+            if (value != "") {
+                Actions.calibrate-mesh(value);
+            }
         } else if (Overlay.text-purpose == "network") {
             Network.edit-text(Overlay.text-id, value);
         } else {
@@ -128,6 +135,7 @@ export component TextDialog inherits Scrim {
         fs := FocusScope {
             // Physical keyboard (e.g. on a PC)
             key-pressed(e) => {
+                Screensaver.activity();
                 if (e.text == Key.Return) {
                     root.submit();
                 } else if (e.text == Key.Escape) {
@@ -237,6 +245,8 @@ export component ConfirmDialog inherits Scrim {
             Actions.host-shutdown();
         } else if (action == "gcode") {
             Actions.gcode(arg);
+        } else if (action == "update") {
+            Update.upgrade(arg);
         } else if (action == "wifi-join") {
             Network.connect(arg, "");
         } else if (action == "wifi-forget") {
@@ -495,7 +505,10 @@ component MenuTile inherits Rectangle {
             overflow: elide;
         }
     }
-    ta := TouchArea { clicked => { root.clicked(); } }
+    ta := TouchArea {
+        pointer-event(e) => { if (e.kind == PointerEventKind.down) { Screensaver.activity(); } }
+        clicked => { root.clicked(); }
+    }
 }
 
 // All screens as big tiles; replaces the side navigation of earlier versions.
@@ -536,8 +549,8 @@ export component MenuSheet inherits Scrim {
                 for item in root.row1: MenuTile {
                     icon: item.icon;
                     text: item.text;
-                    // Z calibration (11) is a sub-page of Move
-                    active: Nav.page == item.page || (item.page == 2 && Nav.page == 11);
+                    // Z calibration (11) and Bed mesh (12) are sub-pages of Move
+                    active: Nav.page == item.page || (item.page == 2 && (Nav.page == 11 || Nav.page == 12));
                     clicked => { root.go(item.page); }
                 }
             }

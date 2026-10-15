@@ -60,7 +60,10 @@ export component SettingsPage inherits Rectangle {
             vertical-stretch: 1;
 
             Card {
-                horizontal-stretch: 1;
+                // Half of the page (padding on both sides, gap between the cards)
+                width: (root.width - 3 * Theme.gap) / 2;
+                // Scrolls when the screen is too short for all rows
+                ScrollView {
                 VerticalLayout {
                     padding: 12px;
                     spacing: 8px;
@@ -97,12 +100,12 @@ export component SettingsPage inherits Rectangle {
                             clicked => { Settings.language = lang.code; }
                         }
                     }
-                    Rectangle { vertical-stretch: 1; }
                     Caption {
                         text: @tr("File: {}", Settings.config-path);
                         wrap: word-wrap;
                         font-size: 12px;
                     }
+                }
                 }
             }
 
@@ -128,6 +131,23 @@ export component SettingsPage inherits Rectangle {
                             alignment: start;
                             spacing: 6px;
                             for p[i] in Settings.presets: PresetRow { preset: p; index: i; }
+                        }
+                    }
+                    Caption { text: @tr("Screen saver"); }
+                    HorizontalLayout {
+                        spacing: 4px;
+                        for option in [
+                            { minutes: 0, name: @tr("Off") },
+                            { minutes: 2, name: @tr("{} min", 2) },
+                            { minutes: 5, name: @tr("{} min", 5) },
+                            { minutes: 10, name: @tr("{} min", 10) },
+                            { minutes: 30, name: @tr("{} min", 30) },
+                        ]: Btn {
+                            text: option.name;
+                            font-size: Theme.font-s;
+                            min-height: 44px;
+                            active: Settings.screensaver-minutes == option.minutes;
+                            clicked => { Settings.screensaver-minutes = option.minutes; }
                         }
                     }
                 }

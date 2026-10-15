@@ -2,7 +2,8 @@
 
 use crate::printer::{FileRow, Snapshot};
 use crate::thumbs::{Pixels, Size};
-use crate::{AppWindow, Conn, ConsoleLine, FileDetails, FileEntry, Messages, Printer, Status};
+use crate::updates::UpdateStatus;
+use crate::{AppWindow, Conn, ConsoleLine, FileDetails, FileEntry, Messages, Printer, Status, Update};
 use slint::{ComponentHandle, Image, Model, ModelRc, SharedString, VecModel, Weak};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -60,6 +61,9 @@ pub fn snapshot(ui: &Weak<AppWindow>, s: Snapshot) {
         p.set_job_thumb(large_thumb(&filename));
         p.set_position(s.position);
         p.set_calibration(s.calibration);
+        p.set_mesh(s.mesh.info);
+        sync(&p.get_mesh_cells(), s.mesh.cells);
+        sync(&p.get_mesh_profiles(), s.mesh.profiles);
         p.set_extruder_temp(s.extruder_temp);
         p.set_has_extruder(s.has_extruder);
         p.set_has_part_fan(s.part_fan.is_some());
@@ -178,6 +182,9 @@ pub fn reset(ui: &Weak<AppWindow>) {
         p.set_job(Default::default());
         p.set_position(Default::default());
         p.set_calibration(Default::default());
+        p.set_mesh(Default::default());
+        sync(&p.get_mesh_cells(), Vec::new());
+        sync(&p.get_mesh_profiles(), Vec::new());
         p.set_details(Default::default());
         p.set_job_thumb(Default::default());
         p.set_details_thumb(Default::default());
@@ -195,6 +202,38 @@ pub fn console_line(text: &str) -> ConsoleLine {
         0
     };
     ConsoleLine { text: text.into(), kind }
+}
+
+/// New update manager status: the list, and whether Moonraker is still working.
+pub fn updates(ui: &Weak<AppWindow>, status: UpdateStatus) {
+    let _ = ui.upgrade_in_event_loop(move |ui| {
+        let u = ui.global::<Update>();
+        sync(&u.get_items(), status.items);
+        u.set_loaded(true);
+        u.set_busy(status.busy);
+        if !status.busy {
+            u.set_message("".into());
+        }
+    });
+}
+
+/// A refresh or update started (empty message), reported progress, or finished.
+pub fn update_progress(ui: &Weak<AppWindow>, message: String, complete: bool) {
+    let _ = ui.upgrade_in_event_loop(move |ui| {
+        let u = ui.global::<Update>();
+        u.set_error("".into());
+        u.set_busy(!complete);
+        u.set_message(if complete { "".into() } else { message.into() });
+    });
+}
+
+pub fn update_error(ui: &Weak<AppWindow>, message: String) {
+    let _ = ui.upgrade_in_event_loop(move |ui| {
+        let u = ui.global::<Update>();
+        u.set_busy(false);
+        u.set_message("".into());
+        u.set_error(message.into());
+    });
 }
 
 /// Shows a raw message (e.g. a Klipper error) as an error toast.
