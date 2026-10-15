@@ -1,6 +1,0 @@
-bootargs.env: kernel command line options for this system slot, read by U-Boot's boot.scr
-(board/odroidxu4/boot.cmd in the source tree). Part of the system, so updates can change it.
-  loglevel=5                 instead of quiet, which would also hide the boot logo
-  fbcon=logo-pos:center      boot logo in the middle of the screen
-  fbcon=...,logo-count:1     one logo; by default the kernel draws one per CPU core (8 here)
-  net.ifnames=0              network interfaces named eth0 / wlan0

@@ -1,6 +1,0 @@
-# Clock sync for the panel's clock and print end time
-CONFIG_NTPD=y
-# Finding the data partition by label (fallback in S15data)
-CONFIG_FINDFS=y
-CONFIG_VOLUMEID=y
-CONFIG_FEATURE_VOLUMEID_EXT=y

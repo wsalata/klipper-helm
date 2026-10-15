@@ -1,9 +1,0 @@
-#!/bin/sh
-# Hands a Wi-Fi interface to the running wpa_supplicant (from S38wifi and udev).
-iface="$1"
-[ -n "$iface" ] && [ -S /var/run/wpa_supplicant-global ] || exit 0
-# Already managed
-[ -S "/var/run/wpa_supplicant/$iface" ] && exit 0
-# Full path: udev runs this without a useful PATH
-/usr/sbin/wpa_cli -g /var/run/wpa_supplicant-global interface_add "$iface" \
-	/data/network/wpa_supplicant.conf nl80211 /var/run/wpa_supplicant >/dev/null

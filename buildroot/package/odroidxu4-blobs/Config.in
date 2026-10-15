@@ -1,9 +1,0 @@
-config BR2_PACKAGE_ODROIDXU4_BLOBS
-	bool "odroidxu4-blobs"
-	depends on BR2_arm
-	help
-	  Signed first-stage loaders (BL1, BL2) and TrustZone firmware
-	  from Hardkernel. The Exynos 5422 boot ROM only runs signed code,
-	  so they must sit in front of U-Boot on the SD card or eMMC.
-
-	  https://github.com/hardkernel/u-boot
