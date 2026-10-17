@@ -69,6 +69,13 @@ a DRM driver (e.g. `panel-mipi-dbi`); SPI screens with only an `fbtft` framebuff
 Screen rotation and the UI scale go in `~/printer_data/config/klipper-helm.env`, next to the panel
 settings (`klipper-helm.toml`); both can be edited in Mainsail.
 
+Cheap HDMI screens often report a wrong preferred mode (e.g. 1024x768 for a 1024x600 panel), which
+shows as a wrong resolution while the system boots and a black or distorted panel. Add
+`video=HDMI-A-1:1024x600@60` (with the screen's real size and the connector from
+`ls /sys/class/drm`) to the single line in `/boot/firmware/cmdline.txt`: it fixes the boot screen,
+and the panel uses that mode too. Alternatively set `KLIPPER_HELM_MODE=1024x600` in
+`klipper-helm.env`; the panel's log (`journalctl -u klipper-helm`) shows the mode in use.
+
 ### Releasing
 
 Set the version in `Cargo.toml`, commit and push a matching tag (`git tag v0.3.0 && git push --tags`).

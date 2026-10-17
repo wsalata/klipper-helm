@@ -20,10 +20,9 @@ use tokio::sync::mpsc::{self, UnboundedSender};
 slint::include_modules!();
 
 fn main() -> anyhow::Result<()> {
-    if drawing_through_kms() {
-        #[cfg(target_os = "linux")]
-        display::probe();
-        auto_scale();
+    #[cfg(target_os = "linux")]
+    if drawing_through_kms() && let Some((width, height)) = display::setup() {
+        auto_scale(width, height);
     }
     let cfg = config::Config::load();
     let ui = AppWindow::new()?;
@@ -106,35 +105,23 @@ fn panel_version() -> String {
 
 /// True when the panel draws on the screen itself (on the printer), false in a desktop
 /// window, where the window system takes care of screens and scaling.
+#[cfg(target_os = "linux")]
 fn drawing_through_kms() -> bool {
-    cfg!(target_os = "linux") && std::env::var_os("WAYLAND_DISPLAY").is_none() && std::env::var_os("DISPLAY").is_none()
+    std::env::var_os("WAYLAND_DISPLAY").is_none() && std::env::var_os("DISPLAY").is_none()
 }
 
-/// Scales the UI (designed for 800x480) to fill the screen when drawing through KMS:
-/// 1024x600 -> 1.25, 1280x720 -> 1.5, from the preferred mode of the first connected
-/// display. SLINT_SCALE_FACTOR set by the user wins.
-fn auto_scale() {
-    if std::env::var_os("SLINT_SCALE_FACTOR").is_some() {
-        return;
-    }
-    let Some(mode) = std::fs::read_dir("/sys/class/drm").into_iter().flatten().flatten().find_map(|e| {
-        let dir = e.path();
-        let connected = std::fs::read_to_string(dir.join("status")).is_ok_and(|s| s.trim() == "connected");
-        let modes = std::fs::read_to_string(dir.join("modes")).ok()?;
-        connected.then(|| modes.lines().next().map(str::to_string))?
-    }) else {
-        return;
-    };
-    if let Some(scale) = scale_for_mode(&mode) {
+/// Scales the UI (designed for 800x480) to fill the screen: 1024x600 -> 1.25,
+/// 1280x720 -> 1.5. SLINT_SCALE_FACTOR set by the user wins.
+#[cfg(target_os = "linux")]
+fn auto_scale(width: u16, height: u16) {
+    if std::env::var_os("SLINT_SCALE_FACTOR").is_none() {
         // SAFETY: runs first in main, before any other thread exists
-        unsafe { std::env::set_var("SLINT_SCALE_FACTOR", format!("{scale:.2}")) };
+        unsafe { std::env::set_var("SLINT_SCALE_FACTOR", format!("{:.2}", scale_for(width, height))) };
     }
 }
 
-fn scale_for_mode(mode: &str) -> Option<f32> {
-    let (w, h) = mode.split_once('x')?;
-    let (w, h): (f32, f32) = (w.parse().ok()?, h.trim_end_matches(|c: char| !c.is_ascii_digit()).parse().ok()?);
-    Some((w / 800.0).min(h / 480.0).max(1.0))
+fn scale_for(width: u16, height: u16) -> f32 {
+    (f32::from(width) / 800.0).min(f32::from(height) / 480.0).max(1.0)
 }
 
 fn wire_actions(ui: &AppWindow, tx: &UnboundedSender<Command>) {
@@ -224,12 +211,11 @@ fn wire_actions(ui: &AppWindow, tx: &UnboundedSender<Command>) {
 mod tests {
     #[test]
     fn scale_from_mode() {
-        assert_eq!(super::scale_for_mode("1024x600"), Some(1.25));
-        assert_eq!(super::scale_for_mode("1280x720"), Some(1.5));
-        assert_eq!(super::scale_for_mode("800x480"), Some(1.0));
-        assert_eq!(super::scale_for_mode("1920x1080i"), Some(2.25));
-        assert_eq!(super::scale_for_mode("640x480"), Some(1.0));
-        assert_eq!(super::scale_for_mode("bad"), None);
+        assert_eq!(super::scale_for(1024, 600), 1.25);
+        assert_eq!(super::scale_for(1280, 720), 1.5);
+        assert_eq!(super::scale_for(800, 480), 1.0);
+        assert_eq!(super::scale_for(1024, 768), 1.28);
+        assert_eq!(super::scale_for(640, 480), 1.0);
     }
 }
 

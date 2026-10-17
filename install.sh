@@ -113,6 +113,11 @@ if [ ! -e "$CONFIG_DIR/klipper-helm.env" ]; then
 # (Mainsail: the power menu, or `sudo systemctl restart klipper-helm`).
 # Everything else is set on the panel (System -> Panel settings) and saved in klipper-helm.toml.
 
+# Screen mode, when the screen reports a wrong one (black or distorted picture). Usually
+# better: video=HDMI-A-1:1024x600@60 in /boot/firmware/cmdline.txt, which also fixes the
+# boot screen and is picked up by the panel automatically.
+#KLIPPER_HELM_MODE=1024x600
+
 # Screen rotation: 0, 90, 180 or 270
 #SLINT_KMS_ROTATION=180
 
