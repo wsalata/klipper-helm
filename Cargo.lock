@@ -2470,6 +2470,7 @@ version = "0.3.1"
 dependencies = [
  "anyhow",
  "chrono",
+ "drm",
  "futures-util",
  "png",
  "serde",

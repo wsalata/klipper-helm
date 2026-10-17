@@ -25,6 +25,10 @@ anyhow = "1"
 ureq = { version = "3", default-features = false }
 png = "0.18"
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# Asks the screen for its modes before Slint starts (see display::probe); same version as Slint uses
+drm = "0.14"
+
 [features]
 default = ["desktop"]
 # Panel in a window on a PC (X11/Wayland) with GPU rendering and accessibility

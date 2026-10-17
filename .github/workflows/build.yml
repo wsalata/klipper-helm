@@ -1,7 +1,7 @@
 # Builds the panel for the printer's computer: Raspberry Pi OS 64-bit (arm64) and 32-bit
-# (armhf), and x86-64. Cross-compiled in Debian bullseye (glibc 2.31), so the binaries also run
-# on older systems such as MainsailOS 1.x, not only on bookworm and newer. Run by the release
-# workflow, or by hand (Actions > Build > Run workflow) to test a build.
+# (armhf), and x86-64. Cross-compiled in Debian bookworm, so the binaries need glibc 2.36
+# (Raspberry Pi OS bookworm or newer). Run by the release workflow, or by hand
+# (Actions > Build > Run workflow) to test a build.
 name: Build
 
 on:
@@ -21,7 +21,7 @@ on:
 jobs:
   binary:
     runs-on: ubuntu-24.04
-    container: debian:bullseye
+    container: debian:bookworm
     strategy:
       matrix:
         include:
@@ -49,12 +49,7 @@ jobs:
       - name: Install the toolchain and the target's libraries
         run: |
           dpkg --add-architecture ${{ matrix.arch }}
-          # Bullseye's support has ended: once its packages leave the mirrors, use the archive
-          if ! apt-get update; then
-            sed -i -e 's|deb.debian.org|archive.debian.org|g' -e 's|security.debian.org|archive.debian.org|g' \
-              -e '/bullseye-updates/d' /etc/apt/sources.list
-            apt-get -o Acquire::Check-Valid-Until=false update
-          fi
+          apt-get update
           apt-get install -y --no-install-recommends ca-certificates curl git build-essential \
             pkg-config ${{ matrix.cross }} \
             libinput-dev:${{ matrix.arch }} libxkbcommon-dev:${{ matrix.arch }} \

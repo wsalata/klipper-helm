@@ -1,5 +1,7 @@
 mod bridge;
 mod config;
+#[cfg(target_os = "linux")]
+mod display;
 mod line_edit;
 mod moonraker;
 mod network;
@@ -18,7 +20,11 @@ use tokio::sync::mpsc::{self, UnboundedSender};
 slint::include_modules!();
 
 fn main() -> anyhow::Result<()> {
-    auto_scale();
+    if drawing_through_kms() {
+        #[cfg(target_os = "linux")]
+        display::probe();
+        auto_scale();
+    }
     let cfg = config::Config::load();
     let ui = AppWindow::new()?;
 
@@ -98,15 +104,17 @@ fn panel_version() -> String {
     }
 }
 
+/// True when the panel draws on the screen itself (on the printer), false in a desktop
+/// window, where the window system takes care of screens and scaling.
+fn drawing_through_kms() -> bool {
+    cfg!(target_os = "linux") && std::env::var_os("WAYLAND_DISPLAY").is_none() && std::env::var_os("DISPLAY").is_none()
+}
+
 /// Scales the UI (designed for 800x480) to fill the screen when drawing through KMS:
 /// 1024x600 -> 1.25, 1280x720 -> 1.5, from the preferred mode of the first connected
 /// display. SLINT_SCALE_FACTOR set by the user wins.
 fn auto_scale() {
-    if std::env::var_os("SLINT_SCALE_FACTOR").is_some() || !cfg!(target_os = "linux") {
-        return;
-    }
-    // In a desktop window the window system decides
-    if std::env::var_os("WAYLAND_DISPLAY").is_some() || std::env::var_os("DISPLAY").is_some() {
+    if std::env::var_os("SLINT_SCALE_FACTOR").is_some() {
         return;
     }
     let Some(mode) = std::fs::read_dir("/sys/class/drm").into_iter().flatten().flatten().find_map(|e| {
