@@ -24,6 +24,7 @@ anyhow = "1"
 # Thumbnails: HTTP from Moonraker on the local network (no TLS), PNG decoding
 ureq = { version = "3", default-features = false }
 png = "0.18"
+cargo-release = "1.1.6"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # Asks the screen for its modes before Slint starts (see display::probe); same version as Slint uses
