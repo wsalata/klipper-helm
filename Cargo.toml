@@ -3,6 +3,18 @@ name = "klipper-helm"
 version = "0.3.3"
 edition = "2024"
 description = "Touch screen panel for Klipper (a KlipperScreen replacement) in Rust + Slint"
+repository = "https://github.com/wsalata/klipper-helm"
+# An application installed from GitHub releases (install.sh), not a crate for crates.io
+publish = false
+
+# `cargo release patch|minor --execute`: bump, commit, tag vX.Y.Z and push; the tag starts the
+# release workflow
+[package.metadata.release]
+push-remote = "github"
+# Never to crates.io
+publish = false
+pre-release-commit-message = "Release {{version}}"
+tag-message = "Klipper Helm {{version}}"
 
 [dependencies]
 # Always: DRM/KMS output with libinput and the software renderer (no GPU needed).
