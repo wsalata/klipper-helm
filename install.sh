@@ -5,6 +5,9 @@
 #   curl -fsSL https://raw.githubusercontent.com/wsalata/klipper-helm/main/install.sh | bash
 #   bash install.sh --uninstall
 #
+# With --boot-splash (Raspberry Pi) it also replaces the boot screen with the Klipper Helm logo:
+#   curl -fsSL https://raw.githubusercontent.com/wsalata/klipper-helm/main/install.sh | bash -s -- --boot-splash
+#
 # Run it as the user Klipper runs as (not root); it asks for sudo where needed. Updates then
 # come through Moonraker's update manager, like Klipper's and Mainsail's.
 set -euo pipefail
@@ -19,6 +22,8 @@ SERVICE=/etc/systemd/system/klipper-helm.service
 POLKIT_RULE=/etc/polkit-1/rules.d/50-klipper-helm.rules
 STATE_DIR=/var/lib/klipper-helm
 SECTION="[update_manager klipper-helm]"
+THEME_DIR=/usr/share/plymouth/themes/klipper-helm
+SPLASH_STATE="$STATE_DIR/boot-splash"
 USER=${USER:-$(id -un)}
 
 say() { printf '\033[1;36m%s\033[0m\n' "$*"; }
@@ -50,8 +55,115 @@ open(path, "w").write(text)
 EOF
 }
 
+# The Raspberry Pi's boot partition (cmdline.txt, config.txt), empty elsewhere
+boot_dir() {
+	for d in /boot/firmware /boot; do
+		if [ -f "$d/cmdline.txt" ] && [ -f "$d/config.txt" ]; then
+			echo "$d"
+			return
+		fi
+	done
+}
+
+# Edits cmdline.txt and config.txt for the boot splash ("apply") or undoes exactly what was
+# added ("revert"), recording the changes in $SPLASH_STATE. Safe to run repeatedly.
+edit_boot_files() {
+	sudo python3 - "$1" "$2" "$SPLASH_STATE" "${3:-}" <<'EOF'
+import os, shutil, sys
+
+boot, mode, state_path, theme = sys.argv[1:5]
+cmdline, config = os.path.join(boot, "cmdline.txt"), os.path.join(boot, "config.txt")
+# No kernel messages, logos or blinking cursor on the screen; Plymouth shows the splash
+SPLASH = ["quiet", "splash", "loglevel=3", "logo.nologo", "vt.global_cursor_default=0",
+          "plymouth.ignore-serial-consoles"]
+CONFIG_BLOCK = "\n\n[all]\n# Klipper Helm boot splash: no rainbow square\ndisable_splash=1\n"
+
+state = {}
+if os.path.exists(state_path):
+    state = dict(line.split("=", 1) for line in open(state_path).read().splitlines() if "=" in line)
+tokens = open(cmdline).read().split()
+config_text = open(config).read()
+
+if mode == "apply":
+    for path in (cmdline, config):
+        if not os.path.exists(path + ".klipper-helm.bak"):
+            shutil.copy2(path, path + ".klipper-helm.bak")
+    added = state.get("cmdline_added", "").split()
+    # Boot messages go to tty3, out of sight
+    if "console=tty1" in tokens:
+        tokens = ["console=tty3" if t == "console=tty1" else t for t in tokens]
+        state["console"] = "tty1"
+    for t in SPLASH:
+        if t not in tokens:
+            tokens.append(t)
+            added.append(t)
+    state["cmdline_added"] = " ".join(dict.fromkeys(added))
+    if not any(line.strip() == "disable_splash=1" for line in config_text.splitlines()):
+        config_text = config_text.rstrip("\n") + CONFIG_BLOCK
+        state["config_added"] = "1"
+    if theme and "theme" not in state:
+        state["theme"] = theme
+    os.makedirs(os.path.dirname(state_path), exist_ok=True)
+    open(state_path, "w").write("".join(f"{k}={v}\n" for k, v in state.items()))
+else:
+    added = set(state.get("cmdline_added", "").split())
+    tokens = [t for t in tokens if t not in added]
+    if state.get("console") == "tty1":
+        tokens = ["console=tty1" if t == "console=tty3" else t for t in tokens]
+    if state.get("config_added") == "1":
+        config_text = config_text.replace(CONFIG_BLOCK, "\n")
+
+open(cmdline, "w").write(" ".join(tokens) + "\n")
+open(config, "w").write(config_text)
+EOF
+}
+
+# Plymouth with the Klipper Helm theme, shown from early boot until the panel takes over
+install_boot_splash() {
+	local boot
+	boot=$(boot_dir)
+	if [ -z "$boot" ]; then
+		warn "No Raspberry Pi boot partition (cmdline.txt, config.txt) found: skipping the boot splash."
+		return
+	fi
+	say "Installing the boot splash"
+	sudo apt-get install -y -qq plymouth
+	sudo mkdir -p "$THEME_DIR"
+	# From a copy of the repository next to this script (testing before a release), else from GitHub
+	local here=""
+	[ -f "${BASH_SOURCE[0]:-}" ] && here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/packaging/plymouth"
+	for f in klipper-helm.plymouth klipper-helm.script logo.png; do
+		if [ -n "$here" ] && [ -f "$here/$f" ]; then
+			sudo cp "$here/$f" "$THEME_DIR/$f"
+		else
+			sudo curl -fsSL -o "$THEME_DIR/$f" "https://raw.githubusercontent.com/$REPO/$VERSION/packaging/plymouth/$f"
+		fi
+	done
+	local previous
+	previous=$(plymouth-set-default-theme 2>/dev/null || true)
+	[ "$previous" = klipper-helm ] && previous=""
+	# Also rebuilds the initramfs, so the splash appears before the root filesystem is mounted
+	sudo plymouth-set-default-theme -R klipper-helm
+	edit_boot_files "$boot" apply "$previous"
+	say "Boot splash installed; backups: $boot/cmdline.txt.klipper-helm.bak, $boot/config.txt.klipper-helm.bak"
+}
+
+remove_boot_splash() {
+	[ -e "$SPLASH_STATE" ] || return 0
+	local boot previous
+	boot=$(boot_dir)
+	previous=$(sed -n 's/^theme=//p' "$SPLASH_STATE")
+	[ -n "$boot" ] && edit_boot_files "$boot" revert
+	if [ -n "$previous" ] && [ -d "/usr/share/plymouth/themes/$previous" ]; then
+		sudo plymouth-set-default-theme -R "$previous" || true
+	fi
+	sudo rm -rf "$THEME_DIR"
+	say "Boot splash removed"
+}
+
 uninstall() {
 	say "Removing Klipper Helm"
+	remove_boot_splash
 	sudo systemctl disable --now klipper-helm.service 2>/dev/null || true
 	sudo rm -f "$SERVICE" "$POLKIT_RULE"
 	sudo systemctl daemon-reload
@@ -67,10 +179,17 @@ uninstall() {
 	say "Done. The panel settings stay in $CONFIG_DIR/klipper-helm.toml."
 }
 
-if [ "${1:-}" = "--uninstall" ]; then
-	uninstall
-	exit 0
-fi
+BOOT_SPLASH=0
+for arg in "$@"; do
+	case "$arg" in
+	--uninstall)
+		uninstall
+		exit 0
+		;;
+	--boot-splash) BOOT_SPLASH=1 ;;
+	*) die "Unknown option: $arg (use --boot-splash or --uninstall)" ;;
+	esac
+done
 
 case "$(dpkg --print-architecture 2>/dev/null || uname -m)" in
 arm64 | aarch64) ASSET=klipper-helm-linux-arm64 ;;
@@ -130,6 +249,8 @@ After=moonraker.service
 Wants=moonraker.service
 # Both draw directly on the screen
 Conflicts=KlipperScreen.service
+# With the boot splash (--boot-splash) the panel takes the screen over from Plymouth
+Before=plymouth-quit.service plymouth-quit-wait.service
 
 [Service]
 Type=simple
@@ -139,6 +260,9 @@ Environment=KLIPPER_HELM_CONFIG=$CONFIG_DIR/klipper-helm.toml
 Environment=KLIPPER_HELM_MANAGE_NETWORK=1
 EnvironmentFile=-/etc/default/locale
 EnvironmentFile=-$CONFIG_DIR/klipper-helm.env
+# Ends the boot splash but keeps the logo on screen until the panel's first frame;
+# as root ("+"), the only user Plymouth listens to, and ignored without Plymouth ("-")
+ExecStartPre=-+/usr/bin/plymouth quit --retain-splash
 ExecStart=$DIR/$ASSET
 Restart=always
 RestartSec=3
@@ -186,6 +310,10 @@ if systemctl is-enabled --quiet KlipperScreen.service 2>/dev/null; then
 	sudo touch "$STATE_DIR/klipperscreen-was-enabled"
 	sudo systemctl disable --now KlipperScreen.service
 	say "KlipperScreen disabled"
+fi
+
+if [ "$BOOT_SPLASH" = 1 ]; then
+	install_boot_splash
 fi
 
 sudo systemctl daemon-reload

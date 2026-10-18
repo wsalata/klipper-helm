@@ -1,0 +1,26 @@
+# Klipper Helm boot splash: the logo exactly where the panel's welcome screen draws it, so the
+# hand-over to the panel (plymouth quit --retain-splash) shows no jump.
+
+# Theme.bg (ui/theme.slint)
+Window.SetBackgroundTopColor(0.043, 0.071, 0.125);
+Window.SetBackgroundBottomColor(0.043, 0.071, 0.125);
+
+# The panel's scale: the UI is designed for 800x480 and never shrinks (main.rs, scale_for)
+screen_w = Window.GetWidth();
+screen_h = Window.GetHeight();
+scale = Math.Min(screen_w / 800, screen_h / 480);
+if (scale < 1)
+    scale = 1;
+logical_h = screen_h / scale;
+
+# logo.png is rendered at scale 2 (make-logo.sh): 280 x 236 logical pixels, starting at the
+# logo's top edge and centred horizontally
+logo = Image("logo.png").Scale(280 * scale, 236 * scale);
+
+# NotReadyPanel: below the 64 px header, a 292 px block (logo, wordmark, status line) centred
+# in the remaining height
+top = 64 + (logical_h - 64 - 292) / 2;
+
+sprite = Sprite(logo);
+sprite.SetX(Window.GetX() + screen_w / 2 - 140 * scale);
+sprite.SetY(Window.GetY() + top * scale);

@@ -64,6 +64,21 @@ The installer:
 
 `bash install.sh --uninstall` removes it all again and re-enables KlipperScreen if it was in use.
 
+On a Raspberry Pi, `--boot-splash` also replaces the boot screen (the rainbow square, the raspberries and
+the boot messages) with the Klipper Helm logo, shown a few seconds after power-on and kept until the
+panel draws its first frame, at the same spot as the panel's welcome screen:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/wsalata/klipper-helm/main/install.sh | bash -s -- --boot-splash
+```
+
+It installs Plymouth with the theme from [packaging/plymouth](packaging/plymouth) (rebuilding the
+initramfs), adds `disable_splash=1` to `config.txt`, and in `cmdline.txt` moves the console to `tty3` and
+adds `quiet splash loglevel=3 logo.nologo vt.global_cursor_default=0 plymouth.ignore-serial-consoles`.
+Both files are backed up first (`*.klipper-helm.bak`); `--uninstall` undoes exactly these changes. The
+logo is rendered from the panel itself by `packaging/plymouth/make-logo.sh`; run it again if the welcome
+screen changes.
+
 The panel draws through DRM/KMS without X11 or Wayland: HDMI and DSI screens work, as do SPI screens with
 a DRM driver (e.g. `panel-mipi-dbi`); SPI screens with only an `fbtft` framebuffer driver do not.
 Screen rotation and the UI scale go in `~/printer_data/config/klipper-helm.env`, next to the panel
@@ -160,6 +175,12 @@ Another screen with the same problem needs its own manufacturer's timing in step
 reports a wrong preferred mode, but one the Pi can output, needs just `video=HDMI-A-1:<width>x<height>@60`
 in `cmdline.txt` for the boot screen and `SLINT_DRM_MODE=<index>` in `klipper-helm.env` for the panel
 (`SLINT_DRM_MODE=list` prints the indexes).
+
+### No picture after enabling the boot splash
+
+The boot messages are on `tty3` now, so a problem during boot is not visible on the screen; use SSH, or
+`sudo journalctl -b`. If the system does not boot at all, put the SD card into another computer and on
+its `bootfs` partition replace `cmdline.txt` and `config.txt` with the `*.klipper-helm.bak` copies.
 
 ### The panel does not start: no connected display
 
