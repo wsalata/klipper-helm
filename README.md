@@ -69,13 +69,6 @@ a DRM driver (e.g. `panel-mipi-dbi`); SPI screens with only an `fbtft` framebuff
 Screen rotation and the UI scale go in `~/printer_data/config/klipper-helm.env`, next to the panel
 settings (`klipper-helm.toml`); both can be edited in Mainsail.
 
-Cheap HDMI screens often report a wrong preferred mode (e.g. 1024x768 for a 1024x600 panel), which
-shows as a wrong resolution while the system boots and a black or distorted panel. Add
-`video=HDMI-A-1:1024x600@60` (with the screen's real size and the connector from
-`ls /sys/class/drm`) to the single line in `/boot/firmware/cmdline.txt`: it fixes the boot screen,
-and the panel uses that mode too. Alternatively set `KLIPPER_HELM_MODE=1024x600` in
-`klipper-helm.env`; the panel's log (`journalctl -u klipper-helm`) shows the mode in use.
-
 ### Releasing
 
 Set the version in `Cargo.toml`, commit and push a matching tag (`git tag v0.3.0 && git push --tags`).
@@ -88,6 +81,91 @@ Moonraker then offers the update. **Actions → Build → Run workflow** builds 
 sudo apt install libudev-dev libinput-dev libxkbcommon-dev libfontconfig-dev
 cargo build --release --no-default-features --features embedded
 ```
+
+## Troubleshooting
+
+Where to look on the printer's computer:
+
+- `journalctl -u klipper-helm -n 50` – the panel's log. At start it names the screen and mode it uses
+  (`Display HDMI-A-1: 1024x600@59`).
+- `sudo dmesg | grep -i drm` – the kernel's view of the screen.
+- `grep -l '^connected' /sys/class/drm/*/status` – the port the screen is on (e.g. `card1-HDMI-A-1`);
+  `cat /sys/class/drm/card1-HDMI-A-1/modes` lists the modes the kernel can use for it.
+
+### Black screen or wrong resolution with a cheap HDMI screen
+
+Seen with a Waveshare 7inch HDMI LCD (C) (1024x600) on a Raspberry Pi 4 with MainsailOS.
+
+**Symptoms:** the boot messages have a wrong resolution; the panel stays black until the screen is
+unplugged and plugged in again, or does not start at all. The panel's log says
+`Could not initialize software display`, `dmesg` repeats
+`User-defined mode not supported: "1024x600": 60 49000 1024 1029 1042 1312 …` and
+`Cannot find any crtc or sizes`, the `modes` file is empty and there is no `/dev/fb0`.
+
+**Cause:** the screen describes itself (its EDID) with a single 1024x600 mode whose horizontal timing
+differs from the manufacturer's specification and has odd values (front porch 5, sync 13). The Raspberry
+Pi 4's HDMI output can only produce even horizontal timings, so the kernel drops the screen's only mode
+and has nothing to show. The screen also does not recover after the signal disappears or changes, which
+is why replugging helps. On a PC the same screen usually works.
+
+**Fix:** give the kernel a corrected copy of the EDID with the manufacturer's timing (for this screen:
+49 MHz, horizontal 1024 + 48/96/144, vertical 600 + 3/10/11), and set the same mode for the firmware's
+boot screen. On the printer's computer:
+
+1. Save the screen's EDID and write the corrected copy (adjust `card1-HDMI-A-1` to the port found above):
+
+   ```sh
+   cp /sys/class/drm/card1-HDMI-A-1/edid ~/edid.bin
+   python3 - ~/edid.bin ~/screen-1024x600.bin <<'EOF'
+   import sys
+   edid = bytearray(open(sys.argv[1], "rb").read()[:128])
+   # First detailed timing: 49 MHz, 1024 + 48/96/144, 600 + 3/10/11, 154 x 86 mm
+   edid[54:71] = bytes([0x24, 0x13, 0x00, 0x20, 0x41, 0x58, 0x18, 0x20, 0x30,
+                        0x60, 0x3A, 0x00, 0x9A, 0x56, 0x00, 0x00, 0x00])
+   edid[127] = -sum(edid[:127]) % 256
+   open(sys.argv[2], "wb").write(edid)
+   EOF
+   ```
+
+   `edid-decode ~/screen-1024x600.bin` (package `edid-decode`) should show
+   `Hfront 48 Hsync 96 Hback 144` and `Vfront 3 Vsync 10 Vback 11`.
+
+2. Let the kernel load it instead of the screen's own EDID:
+
+   ```sh
+   sudo mkdir -p /lib/firmware/edid
+   sudo cp ~/screen-1024x600.bin /lib/firmware/edid/
+   sudo cp /boot/firmware/cmdline.txt /boot/firmware/cmdline.txt.bak
+   ```
+
+   Then edit `/boot/firmware/cmdline.txt`: it is a single line; remove any `video=…` and append
+   ` drm.edid_firmware=HDMI-A-1:edid/screen-1024x600.bin` to it. If the system no longer boots, restore
+   `cmdline.txt.bak` from the SD card's `bootfs` partition on another computer.
+
+3. Set the same resolution for the boot screen, at the end of `/boot/firmware/config.txt` (the
+   manufacturer's setting; giving the firmware the EDID file with `hdmi_edid_file` instead showed a
+   coloured strip on this screen):
+
+   ```ini
+   [all]
+   hdmi_group=2
+   hdmi_mode=87
+   hdmi_cvt=1024 600 60 6 0 0 0
+   ```
+
+4. `sudo reboot`. Now `modes` lists `1024x600`, `/dev/fb0` exists, the boot messages are sharp and the
+   panel starts without replugging.
+
+Another screen with the same problem needs its own manufacturer's timing in step 1. A screen that only
+reports a wrong preferred mode, but one the Pi can output, needs just `video=HDMI-A-1:<width>x<height>@60`
+in `cmdline.txt` for the boot screen and `SLINT_DRM_MODE=<index>` in `klipper-helm.env` for the panel
+(`SLINT_DRM_MODE=list` prints the indexes).
+
+### The panel does not start: no connected display
+
+`No connected display connector found` in the panel's log means the kernel sees no screen: check the
+cable and the port (on a Raspberry Pi 4 the micro-HDMI port next to the power socket is `HDMI-A-1`), and
+that `dtoverlay=vc4-kms-v3d` is in `config.txt`. If the screen is detected but has no modes, see above.
 
 ## Thumbnails
 
