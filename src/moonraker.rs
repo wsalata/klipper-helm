@@ -34,6 +34,10 @@ pub enum Command {
     CalibrateZ(String),
     /// New bed mesh, saved under this profile name ("" for "default")
     CalibrateMesh(String),
+    /// Bed levelling: "screws-tilt", "bed-screws", "z-tilt" or "gantry"
+    LevelBed(String),
+    /// PID tuning: heater object, target temperature
+    CalibratePid(String, f32),
     Pause,
     Resume,
     Cancel,
@@ -58,6 +62,8 @@ enum Pending {
     Ignore,
     Action,
     Gcode,
+    /// PID_CALIBRATE: the answer comes when the tuning ends
+    Pid,
     PrinterInfo,
     ObjectsList,
     Subscribe,
@@ -303,6 +309,10 @@ impl<'a> Session<'a> {
     async fn on_result(&mut self, pending: Pending, result: &Value) -> anyhow::Result<()> {
         match pending {
             Pending::Ignore | Pending::Action | Pending::Gcode => {}
+            Pending::Pid => {
+                self.model.pid_heater.clear();
+                self.push_state();
+            }
             Pending::PrinterInfo => {
                 let s = |k: &str| result.get(k).and_then(Value::as_str).unwrap_or("").to_string();
                 self.model.klippy_state = s("state");
@@ -394,6 +404,13 @@ impl<'a> Session<'a> {
                 bridge::console(&self.ui, vec![ConsoleLine { text: format!("!! {msg}").into(), kind: 2 }]);
                 bridge::toast(&self.ui, msg);
             }
+            // A failed or interrupted tuning ends it too
+            Pending::Pid => {
+                self.model.pid_heater.clear();
+                self.push_state();
+                bridge::console(&self.ui, vec![ConsoleLine { text: format!("!! {msg}").into(), kind: 2 }]);
+                bridge::toast(&self.ui, msg);
+            }
             Pending::FileMeta(path) => {
                 bridge::details(&self.ui, printer::file_details(&path, &Value::Null));
             }
@@ -443,6 +460,18 @@ impl<'a> Session<'a> {
                 };
             }
             Command::CalibrateMesh(profile) => return self.gcode(self.model.bed_mesh_gcode(&profile)).await,
+            Command::CalibratePid(heater, target) => {
+                let Some(g) = self.model.pid_calibrate_gcode(&heater, target) else { return Ok(()) };
+                self.model.pid_heater = heater;
+                self.push_state();
+                return self.call("printer.gcode.script", json!({ "script": g }), Pending::Pid).await;
+            }
+            Command::LevelBed(method) => {
+                return match self.model.level_bed_gcode(&method) {
+                    Some(g) => self.gcode(g).await,
+                    None => Ok(()),
+                };
+            }
             Command::UpdateRefresh => {
                 bridge::update_progress(&self.ui, String::new(), false);
                 return self.call("machine.update.refresh", json!({}), Pending::UpdateRefresh).await;

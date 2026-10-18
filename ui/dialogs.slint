@@ -520,6 +520,7 @@ export component MenuSheet inherits Scrim {
         { icon: @image-url("icons/thermo.svg"), text: @tr("Temperature"), page: 1 },
         { icon: @image-url("icons/move.svg"), text: @tr("Move"), page: 2 },
         { icon: @image-url("icons/extrude.svg"), text: @tr("Filament"), page: 3 },
+        { icon: @image-url("icons/calibrate.svg"), text: @tr("Calibration"), page: 13 },
     ];
     property <[{ icon: image, text: string, page: int }]> row2: [
         { icon: @image-url("icons/files.svg"), text: @tr("Files"), page: 4 },
@@ -549,15 +550,18 @@ export component MenuSheet inherits Scrim {
                 for item in root.row1: MenuTile {
                     icon: item.icon;
                     text: item.text;
-                    // Z calibration (11) and Bed mesh (12) are sub-pages of Move
-                    active: Nav.page == item.page || (item.page == 2 && (Nav.page == 11 || Nav.page == 12));
+                    // Z calibration (11), Bed mesh (12), Bed levelling (14) and Heaters (15) are sub-pages of Calibration
+                    active: Nav.page == item.page || (item.page == 13 && (Nav.page == 11 || Nav.page == 12 || Nav.page >= 14));
                     clicked => { root.go(item.page); }
                 }
             }
+            // One tile fewer than the first row: same tile width, centred
             HorizontalLayout {
                 spacing: 12px;
                 vertical-stretch: 1;
+                alignment: center;
                 for item in root.row2: MenuTile {
+                    width: (root.width - 32px - 2 * 16px - (root.row1.length - 1) * 12px) / root.row1.length;
                     icon: item.icon;
                     text: item.text;
                     // Settings (8), Network (9) and Updates (10) are sub-pages of System

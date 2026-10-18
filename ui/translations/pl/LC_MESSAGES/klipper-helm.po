@@ -594,3 +594,120 @@ msgstr "Aktualizuj wszystko"
 
 msgid "Update everything? Klipper and Moonraker restart during the update."
 msgstr "Zaktualizować wszystko? Klipper i Moonraker zrestartują się w trakcie aktualizacji."
+
+msgid "Open"
+msgstr "Otwórz"
+
+msgid "Paper test: sets the distance between the nozzle and the bed."
+msgstr "Test kartki: ustawia odległość między dyszą a stołem."
+
+msgid "Probes the bed surface and manages saved mesh profiles."
+msgstr "Mierzy powierzchnię stołu i zarządza zapisanymi profilami siatki."
+
+msgid "Bed levelling"
+msgstr "Poziomowanie stołu"
+
+msgid "Bed screws"
+msgstr "Śruby stołu"
+
+msgid "Gantry"
+msgstr "Bramownica"
+
+msgid "Bed tilt"
+msgstr "Pochylenie stołu"
+
+msgid "Not configured"
+msgstr "Nieskonfigurowane"
+
+msgid "Levels the bed with its screws or with several Z motors."
+msgstr "Poziomuje stół śrubami lub kilkoma silnikami Z."
+
+msgid "Screw {}"
+msgstr "Śruba {}"
+
+msgid "Reference"
+msgstr "Odniesienie"
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Clockwise {}"
+msgstr "W prawo {}"
+
+msgid "Counter-clockwise {}"
+msgstr "W lewo {}"
+
+msgid "Bed levelling is not configured in Klipper ([screws_tilt_adjust], [bed_screws], [z_tilt] or [quad_gantry_level] section)."
+msgstr "Poziomowanie stołu nie jest skonfigurowane w Klipperze (sekcja [screws_tilt_adjust], [bed_screws], [z_tilt] lub [quad_gantry_level])."
+
+msgid "Fine adjustment"
+msgstr "Regulacja dokładna"
+
+msgid "Coarse adjustment"
+msgstr "Regulacja zgrubna"
+
+msgid "Turn the screw until a sheet of paper under the nozzle slides with slight friction. Press Adjusted if you turned it, Accept if it was already right."
+msgstr "Kręć śrubą, aż kartka papieru pod dyszą będzie się przesuwać z lekkim oporem. Naciśnij Wyregulowano, jeśli śruba była kręcona, albo Zatwierdź, jeśli było dobrze."
+
+msgid "Heat the bed to printing temperature, then press Measure. The probe checks the bed at each screw and shows how far to turn it."
+msgstr "Nagrzej stół do temperatury druku, potem naciśnij Zmierz. Sonda sprawdzi stół przy każdej śrubie i pokaże, o ile ją obrócić."
+
+msgid "The screws differ more than allowed (max. {} mm)."
+msgstr "Różnica między śrubami przekracza dopuszczalną (maks. {} mm)."
+
+msgid "01:15 means one full turn and a quarter. Measure again after turning the screws."
+msgstr "01:15 oznacza jeden pełny obrót i ćwierć. Po obróceniu śrub zmierz ponownie."
+
+msgid "Heat the bed to printing temperature first. The nozzle stops over each screw in turn for the paper test."
+msgstr "Najpierw nagrzej stół do temperatury druku. Dysza zatrzyma się kolejno nad każdą śrubą do testu z kartką."
+
+msgid "Levelled since Klipper started."
+msgstr "Wypoziomowano od uruchomienia Klippera."
+
+msgid "Not levelled since Klipper started. The Z motors are adjusted using the probe, then Z is homed again."
+msgstr "Nie poziomowano od uruchomienia Klippera. Silniki Z zostaną wyrównane przy użyciu sondy, a potem drukarka ponownie wykona bazowanie osi Z."
+
+msgid "Adjusted"
+msgstr "Wyregulowano"
+
+msgid "Measure"
+msgstr "Zmierz"
+
+msgid "Adjust screws"
+msgstr "Reguluj śruby"
+
+msgid "Level bed tilt"
+msgstr "Wyrównaj pochylenie stołu"
+
+msgid "Level gantry"
+msgstr "Wyrównaj bramownicę"
+
+msgid "Heaters"
+msgstr "Grzałki"
+
+msgid "Heater"
+msgstr "Grzałka"
+
+msgid "Heater calibration"
+msgstr "Kalibracja grzałek"
+
+msgid "PID tuning"
+msgstr "Strojenie PID"
+
+msgid "Calibrating"
+msgstr "Trwa kalibracja"
+
+msgid "Tunes how the nozzle and the bed hold their temperature."
+msgstr "Dostraja utrzymywanie temperatury dyszy i stołu."
+
+msgid "No heaters found."
+msgstr "Nie znaleziono grzałek."
+
+msgid "The heater is heated to the target and its response is measured, so that it holds the temperature steadily. It takes a few minutes; use your usual printing temperature."
+msgstr "Grzałka zostanie nagrzana do zadanej temperatury, a jej reakcja zmierzona, by potem stabilnie utrzymywała temperaturę. Trwa to kilka minut; użyj swojej zwykłej temperatury druku."
+
+msgid "Target"
+msgstr "Zadana"
+
+msgid "Wait until Klipper reports the result. The emergency stop interrupts the calibration."
+msgstr "Poczekaj, aż Klipper poda wynik. Kalibrację przerywa zatrzymanie awaryjne."

@@ -19,8 +19,9 @@ On a Raspberry Pi it draws directly through KMS/DRM (no X11/Wayland); on a PC it
   (Ethernet DHCP or static address, Wi-Fi scanning and joining, through NetworkManager) and
   **Updates** (Moonraker's update manager: Klipper, Moonraker, Mainsail, the panel itself and the
   system packages, as in Mainsail)
-- **Move → Calibration**: Z offset (probe/BLTouch paper test, or the Z endstop) and the bed mesh
-  (height map, calibration, profiles)
+- **Calibration** (own menu entry): Z offset (probe/BLTouch paper test, or the Z endstop), the bed mesh
+  (height map, calibration, profiles) and bed levelling (bed screws measured with the probe or
+  adjusted by the paper test, Z tilt, quad gantry level) and heater PID tuning
 - A **screen saver** with a dimmed clock and the print progress after a few minutes without touches
 
 The emergency stop is always in the top right corner: a red round button with three clockwise arrows,

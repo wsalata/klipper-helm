@@ -41,6 +41,8 @@ fn main() -> anyhow::Result<()> {
     printer.set_console(ModelRc::new(VecModel::<ConsoleLine>::default()));
     printer.set_mesh_cells(ModelRc::new(VecModel::<MeshCell>::default()));
     printer.set_mesh_profiles(ModelRc::new(VecModel::<MeshProfile>::default()));
+    printer.set_screws(ModelRc::new(VecModel::<ScrewAdjust>::default()));
+    printer.set_pid_heaters(ModelRc::new(VecModel::<Heater>::default()));
 
     // Must run after the first component exists
     settings::apply_language(&cfg.language);
@@ -146,6 +148,8 @@ fn wire_actions(ui: &AppWindow, tx: &UnboundedSender<Command>) {
     on!(on_extrude, |mm, speed| Command::Extrude(mm, speed));
     on!(on_calibrate_z, |method| Command::CalibrateZ(method.into()));
     on!(on_calibrate_mesh, |profile| Command::CalibrateMesh(profile.into()));
+    on!(on_level_bed, |method| Command::LevelBed(method.into()));
+    on!(on_calibrate_pid, |heater, target| Command::CalibratePid(heater.into(), target));
     on!(on_pause, || Command::Pause);
     on!(on_resume, || Command::Resume);
     on!(on_cancel, || Command::Cancel);

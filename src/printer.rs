@@ -2,7 +2,7 @@
 //! into the structures shown by the UI. Only codes and raw data go to the UI;
 //! translated labels are produced in Slint.
 
-use crate::{BedMeshInfo, Conn, Fan, FileDetails, Heater, MeshCell, MeshProfile, PrintJob, Position, Status, ZCalibration};
+use crate::{BedLevel, BedMeshInfo, Conn, Fan, FileDetails, Heater, MeshCell, MeshProfile, PrintJob, Position, ScrewAdjust, Status, ZCalibration};
 use serde_json::{Value, json};
 
 /// Klipper objects discovered via `printer.objects.list`.
@@ -17,6 +17,11 @@ pub struct Objects {
     /// Klipper's manual probe helper (TESTZ/ACCEPT/ABORT), used by Z calibration
     pub manual_probe: bool,
     pub bed_mesh: bool,
+    /// Bed levelling: [screws_tilt_adjust], [bed_screws], [z_tilt], [quad_gantry_level]
+    pub screws_tilt: bool,
+    pub bed_screws: bool,
+    pub z_tilt: bool,
+    pub gantry: bool,
 }
 
 impl Objects {
@@ -35,6 +40,10 @@ impl Objects {
                 "probe" => o.probe = true,
                 "manual_probe" => o.manual_probe = true,
                 "bed_mesh" => o.bed_mesh = true,
+                "screws_tilt_adjust" => o.screws_tilt = true,
+                "bed_screws" => o.bed_screws = true,
+                "z_tilt" => o.z_tilt = true,
+                "quad_gantry_level" => o.gantry = true,
                 _ => {}
             }
         }
@@ -66,8 +75,16 @@ impl Objects {
         if self.manual_probe {
             objects.insert("manual_probe".into(), Value::Null);
         }
-        if self.bed_mesh {
-            objects.insert("bed_mesh".into(), Value::Null);
+        for (present, name) in [
+            (self.bed_mesh, "bed_mesh"),
+            (self.screws_tilt, "screws_tilt_adjust"),
+            (self.bed_screws, "bed_screws"),
+            (self.z_tilt, "z_tilt"),
+            (self.gantry, "quad_gantry_level"),
+        ] {
+            if present {
+                objects.insert(name.into(), Value::Null);
+            }
         }
         // Only this field: the whole configfile object holds the full printer config
         objects.insert("configfile".into(), json!(["save_config_pending"]));
@@ -188,6 +205,11 @@ pub struct Snapshot {
     pub part_fan: Option<f32>,
     pub calibration: ZCalibration,
     pub mesh: MeshData,
+    pub level: BedLevel,
+    pub screws: Vec<ScrewAdjust>,
+    /// Heaters PID_CALIBRATE works with (not temperature fans)
+    pub pid_heaters: Vec<Heater>,
+    pub pid_heater: String,
 }
 
 #[derive(Default)]
@@ -199,6 +221,8 @@ pub struct PrinterModel {
     pub subscribed: bool,
     /// Metadata of the file being printed: (path, metadata or Null)
     pub job_meta: Option<(String, Value)>,
+    /// Heater whose PID_CALIBRATE is running ("" when none): Klipper answers when it ends
+    pub pid_heater: String,
 }
 
 impl PrinterModel {
@@ -398,6 +422,80 @@ impl PrinterModel {
         }
     }
 
+    fn level(&self) -> BedLevel {
+        let o = &self.objects;
+        let applied = |obj: &str| self.status.pointer(&format!("/{obj}/applied")).and_then(Value::as_bool);
+        BedLevel {
+            screws_tilt: o.screws_tilt,
+            bed_screws: o.bed_screws,
+            z_tilt: o.z_tilt,
+            gantry: o.gantry,
+            tilt_applied: applied("z_tilt").or(applied("quad_gantry_level")).unwrap_or(false),
+            max_deviation: self
+                .f("/screws_tilt_adjust/max_deviation")
+                .map_or_else(String::new, |v| format!("{v:.3}"))
+                .into(),
+            deviation_error: self.status.pointer("/screws_tilt_adjust/error").and_then(Value::as_bool).unwrap_or(false),
+            adjusting: self.status.pointer("/bed_screws/is_active").and_then(Value::as_bool).unwrap_or(false),
+            fine: self.s("/bed_screws/state") == "fine",
+            // Klipper counts from 0
+            screw: self.f("/bed_screws/current_screw").map_or(0, |v| v as i32 + 1),
+        }
+    }
+
+    /// Results of SCREWS_TILT_CALCULATE ("screw1", "screw2", ...), in config order.
+    fn screws(&self) -> Vec<ScrewAdjust> {
+        let Some(results) = self.status.pointer("/screws_tilt_adjust/results").and_then(Value::as_object) else {
+            return Vec::new();
+        };
+        let mut screws: Vec<ScrewAdjust> = results
+            .iter()
+            .map(|(key, r)| {
+                let text = |field: &str| r.get(field).and_then(Value::as_str).unwrap_or_default();
+                ScrewAdjust {
+                    number: key.trim_start_matches("screw").parse().unwrap_or(0),
+                    // Older Klipper versions do not report the configured name
+                    name: text("name").into(),
+                    base: r.get("is_base").and_then(Value::as_bool).unwrap_or(false),
+                    clockwise: text("sign") == "CW",
+                    turns: text("adjust").into(),
+                    z: r.get("z").and_then(Value::as_f64).map_or_else(String::new, |z| format!("{z:.3}")).into(),
+                }
+            })
+            .collect();
+        screws.sort_by_key(|s| s.number);
+        screws
+    }
+
+    /// Bed levelling, homing first if needed. `method`: "screws-tilt" (SCREWS_TILT_CALCULATE),
+    /// "bed-screws" (BED_SCREWS_ADJUST, then ACCEPT/ADJUSTED/ABORT), "z-tilt" or "gantry".
+    /// Z is homed again after Z_TILT_ADJUST and QUAD_GANTRY_LEVEL, which tilt the bed or gantry.
+    pub fn level_bed_gcode(&self, method: &str) -> Option<String> {
+        let command = match method {
+            "screws-tilt" => "SCREWS_TILT_CALCULATE",
+            "bed-screws" => "BED_SCREWS_ADJUST",
+            "z-tilt" => "Z_TILT_ADJUST\nG28 Z",
+            "gantry" => "QUAD_GANTRY_LEVEL\nG28 Z",
+            _ => return None,
+        };
+        let mut script = String::new();
+        let homed = self.s("/toolhead/homed_axes");
+        if !(homed.contains('x') && homed.contains('y') && homed.contains('z')) {
+            script.push_str("G28\n");
+        }
+        script.push_str(command);
+        Some(script)
+    }
+
+    /// PID tuning of a heater at `target` °C; Klipper then waits for SAVE_CONFIG to keep it.
+    pub fn pid_calibrate_gcode(&self, heater: &str, target: f32) -> Option<String> {
+        if !self.objects.has(heater) || heater.starts_with("temperature_fan") || target <= 0.0 {
+            return None;
+        }
+        let name = heater.split_once(' ').map_or(heater, |(_, n)| n);
+        Some(format!("PID_CALIBRATE HEATER={name} TARGET={}", target.round()))
+    }
+
     /// Probes a new bed mesh, homing first if needed. Klipper stores it as `profile`
     /// ("default" when empty) and waits for SAVE_CONFIG to keep it.
     pub fn bed_mesh_gcode(&self, profile: &str) -> String {
@@ -484,6 +582,7 @@ impl PrinterModel {
             .iter()
             .any(|f| f == "fan")
             .then(|| self.f("/fan/speed").unwrap_or(0.0) as f32);
+        let pid_heaters = heaters.iter().filter(|h| !h.id.starts_with("temperature_fan")).cloned().collect();
         Snapshot {
             conn: self.conn(),
             status: self.status(),
@@ -503,6 +602,10 @@ impl PrinterModel {
             position,
             calibration: self.calibration(),
             mesh: self.mesh(),
+            level: self.level(),
+            screws: self.screws(),
+            pid_heaters,
+            pid_heater: self.pid_heater.clone(),
         }
     }
 }
@@ -648,6 +751,55 @@ mod tests {
         // No loaded mesh: nothing to draw
         m.status["bed_mesh"]["profile_name"] = json!("");
         assert!(m.mesh().cells.is_empty());
+    }
+
+    #[test]
+    fn bed_level() {
+        let mut m = PrinterModel::default();
+        m.objects = Objects::discover(&[json!("screws_tilt_adjust"), json!("z_tilt")]);
+        assert!(m.objects.screws_tilt && m.objects.z_tilt && !m.objects.bed_screws);
+        assert!(m.objects.subscription()["objects"].get("screws_tilt_adjust").is_some());
+        m.status = json!({
+            "toolhead": { "homed_axes": "" },
+            "screws_tilt_adjust": {
+                "error": false,
+                "max_deviation": null,
+                "results": {
+                    "screw10": { "z": 2.1, "sign": "CCW", "adjust": "00:05", "is_base": false },
+                    "screw2": { "z": 2.2, "sign": "CW", "adjust": "01:15", "is_base": false, "name": "front right" },
+                    "screw1": { "z": 2.0, "sign": "CW", "adjust": "00:00", "is_base": true },
+                },
+            },
+            "z_tilt": { "applied": true },
+        });
+        let screws = m.screws();
+        let order: Vec<_> = screws.iter().map(|s| s.number).collect();
+        assert_eq!(order, [1, 2, 10]);
+        assert!(screws[0].base && screws[1].clockwise && !screws[2].clockwise);
+        assert_eq!((screws[1].name.as_str(), screws[1].turns.as_str()), ("front right", "01:15"));
+        let level = m.level();
+        assert!(level.tilt_applied && !level.adjusting);
+        assert_eq!(level.max_deviation, "");
+
+        assert_eq!(m.level_bed_gcode("screws-tilt").as_deref(), Some("G28\nSCREWS_TILT_CALCULATE"));
+        m.status["toolhead"]["homed_axes"] = json!("xyz");
+        assert_eq!(m.level_bed_gcode("gantry").as_deref(), Some("QUAD_GANTRY_LEVEL\nG28 Z"));
+        assert_eq!(m.level_bed_gcode("other"), None);
+    }
+
+    #[test]
+    fn pid_calibrate() {
+        let mut m = PrinterModel::default();
+        m.objects = Objects::discover(&[json!("extruder"), json!("heater_generic chamber"), json!("temperature_fan pi")]);
+        assert_eq!(m.pid_calibrate_gcode("extruder", 209.6).as_deref(), Some("PID_CALIBRATE HEATER=extruder TARGET=210"));
+        assert_eq!(
+            m.pid_calibrate_gcode("heater_generic chamber", 50.0).as_deref(),
+            Some("PID_CALIBRATE HEATER=chamber TARGET=50")
+        );
+        assert_eq!(m.pid_calibrate_gcode("temperature_fan pi", 50.0), None);
+        assert_eq!(m.pid_calibrate_gcode("heater_bed", 60.0), None);
+        let ids: Vec<_> = m.snapshot().pid_heaters.iter().map(|h| h.id.to_string()).collect();
+        assert_eq!(ids, ["extruder", "heater_generic chamber"]);
     }
 
     #[test]

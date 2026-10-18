@@ -22,6 +22,9 @@ import { NetworkPage } from "pages/network.slint";
 import { UpdatePage } from "pages/update.slint";
 import { ZCalibratePage } from "pages/zcalibrate.slint";
 import { BedMeshPage } from "pages/bedmesh.slint";
+import { CalibrationPage } from "pages/calibration.slint";
+import { BedLevelPage } from "pages/bedlevel.slint";
+import { PidPage } from "pages/pid.slint";
 import { ScreensaverView } from "screensaver.slint";
 
 export { Printer, Actions, Overlay, Nav, Settings, Messages, Network, Update, Screensaver }
@@ -40,6 +43,9 @@ component Header inherits HorizontalLayout {
         if (page == 10) { return @tr("Updates"); }
         if (page == 11) { return @tr("Z calibration"); }
         if (page == 12) { return @tr("Bed mesh"); }
+        if (page == 13) { return @tr("Calibration"); }
+        if (page == 14) { return @tr("Bed levelling"); }
+        if (page == 15) { return @tr("Heater calibration"); }
         return "";
     }
 
@@ -169,6 +175,9 @@ export component AppWindow inherits Window {
             if Nav.page == 10: UpdatePage { width: 100%; height: 100%; }
             if !root.blocked && Nav.page == 11: ZCalibratePage { width: 100%; height: 100%; }
             if !root.blocked && Nav.page == 12: BedMeshPage { width: 100%; height: 100%; }
+            if !root.blocked && Nav.page == 13: CalibrationPage { width: 100%; height: 100%; }
+            if !root.blocked && Nav.page == 14: BedLevelPage { width: 100%; height: 100%; }
+            if !root.blocked && Nav.page == 15: PidPage { width: 100%; height: 100%; }
           }
         }
     }

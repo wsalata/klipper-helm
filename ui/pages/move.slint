@@ -1,5 +1,5 @@
 import { Theme } from "../theme.slint";
-import { Printer, Actions, Nav } from "../state.slint";
+import { Printer, Actions } from "../state.slint";
 import { Btn, BtnKind, Card, Caption, Segmented } from "../widgets.slint";
 
 component AxisLabel inherits VerticalLayout {
@@ -98,17 +98,6 @@ export component MovePage inherits Rectangle {
                     Btn { text: "Z"; clicked => { Actions.gcode("G28 Z"); } }
                 }
                 Rectangle { vertical-stretch: 1; }
-                Caption { text: @tr("Calibration"); }
-                Btn {
-                    text: @tr("Z offset");
-                    font-size: Theme.font-s;
-                    clicked => { Nav.page = 11; }
-                }
-                Btn {
-                    text: @tr("Bed mesh");
-                    font-size: Theme.font-s;
-                    clicked => { Nav.page = 12; }
-                }
                 Btn {
                     text: @tr("Motors off");
                     font-size: Theme.font-s;

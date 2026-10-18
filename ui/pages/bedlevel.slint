@@ -1,0 +1,158 @@
+import { Theme } from "../theme.slint";
+import { Printer, Actions, BedLevel, ScrewAdjust } from "../state.slint";
+import { Btn, BtnKind, Card, Caption } from "../widgets.slint";
+
+component Hint inherits Text {
+    color: Theme.text-dim;
+    font-size: Theme.font-s;
+    wrap: word-wrap;
+}
+
+component ScrewRow inherits HorizontalLayout {
+    in property <ScrewAdjust> screw;
+    spacing: Theme.gap;
+    Text {
+        text: root.screw.name != "" ? root.screw.name : @tr("Screw {}", root.screw.number);
+        color: Theme.text;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+    Text {
+        text: root.screw.base ? @tr("Reference")
+            : root.screw.turns == "00:00" ? @tr("OK")
+            : root.screw.clockwise ? @tr("Clockwise {}", root.screw.turns)
+            : @tr("Counter-clockwise {}", root.screw.turns);
+        color: root.screw.base || root.screw.turns == "00:00" ? Theme.text-dim : Theme.accent;
+        font-weight: 600;
+        horizontal-alignment: right;
+        vertical-alignment: center;
+        horizontal-stretch: 0;
+    }
+}
+
+// Bed levelling with whichever Klipper helper is configured: measuring the bed screws
+// with a probe (screws_tilt_adjust), the paper test at each screw (bed_screws), or
+// tilting the bed or gantry with several Z motors (z_tilt, quad_gantry_level).
+export component BedLevelPage inherits Rectangle {
+    property <BedLevel> lv: Printer.level;
+    property <bool> any: lv.screws-tilt || lv.bed-screws || lv.z-tilt || lv.gantry;
+
+    HorizontalLayout {
+        padding: Theme.gap;
+        spacing: Theme.gap;
+
+        Card {
+            horizontal-stretch: 1;
+            VerticalLayout {
+                padding: 12px;
+                spacing: 10px;
+
+                if !root.any: Hint {
+                    text: @tr("Bed levelling is not configured in Klipper ([screws_tilt_adjust], [bed_screws], [z_tilt] or [quad_gantry_level] section).");
+                }
+
+                // Manual adjustment in progress: one screw at a time
+                if root.lv.adjusting: Caption {
+                    text: root.lv.fine ? @tr("Fine adjustment") : @tr("Coarse adjustment");
+                }
+                if root.lv.adjusting: Text {
+                    text: @tr("Screw {}", root.lv.screw);
+                    color: Theme.text;
+                    font-size: 56px;
+                    font-weight: 700;
+                    horizontal-alignment: center;
+                }
+                if root.lv.adjusting: Hint {
+                    text: @tr("Turn the screw until a sheet of paper under the nozzle slides with slight friction. Press Adjusted if you turned it, Accept if it was already right.");
+                }
+
+                if root.lv.screws-tilt && !root.lv.adjusting: Caption { text: @tr("Bed screws"); }
+                if root.lv.screws-tilt && !root.lv.adjusting && Printer.screws.length == 0: Hint {
+                    text: @tr("Heat the bed to printing temperature, then press Measure. The probe checks the bed at each screw and shows how far to turn it.");
+                }
+                if root.lv.screws-tilt && !root.lv.adjusting && Printer.screws.length > 0: Flickable {
+                    vertical-stretch: 1;
+                    content-height: list.preferred-height;
+                    list := VerticalLayout {
+                        alignment: start;
+                        spacing: 8px;
+                        for screw in Printer.screws: ScrewRow { screw: screw; }
+                    }
+                }
+                if root.lv.screws-tilt && !root.lv.adjusting && Printer.screws.length > 0: Hint {
+                    text: root.lv.deviation-error
+                        ? @tr("The screws differ more than allowed (max. {} mm).", root.lv.max-deviation)
+                        : @tr("01:15 means one full turn and a quarter. Measure again after turning the screws.");
+                    color: root.lv.deviation-error ? Theme.warn : Theme.text-dim;
+                }
+
+                if root.lv.bed-screws && !root.lv.screws-tilt && !root.lv.adjusting: Caption { text: @tr("Bed screws"); }
+                if root.lv.bed-screws && !root.lv.screws-tilt && !root.lv.adjusting: Hint {
+                    text: @tr("Heat the bed to printing temperature first. The nozzle stops over each screw in turn for the paper test.");
+                }
+
+                if (root.lv.z-tilt || root.lv.gantry) && !root.lv.adjusting: Caption {
+                    text: root.lv.gantry ? @tr("Gantry") : @tr("Bed tilt");
+                }
+                if (root.lv.z-tilt || root.lv.gantry) && !root.lv.adjusting: Hint {
+                    text: root.lv.tilt-applied
+                        ? @tr("Levelled since Klipper started.")
+                        : @tr("Not levelled since Klipper started. The Z motors are adjusted using the probe, then Z is homed again.");
+                }
+
+                Rectangle { vertical-stretch: 1; }
+            }
+        }
+
+        Card {
+            width: 300px;
+            VerticalLayout {
+                padding: 12px;
+                spacing: Theme.gap;
+
+                if root.lv.adjusting: Btn {
+                    text: @tr("Adjusted");
+                    kind: BtnKind.accent;
+                    vertical-stretch: 1;
+                    clicked => { Actions.gcode("ADJUSTED"); }
+                }
+                if root.lv.adjusting: Btn {
+                    text: @tr("Accept");
+                    vertical-stretch: 1;
+                    clicked => { Actions.gcode("ACCEPT"); }
+                }
+                if root.lv.adjusting: Btn {
+                    text: @tr("Abort");
+                    kind: BtnKind.ghost;
+                    clicked => { Actions.gcode("ABORT"); }
+                }
+
+                if root.lv.screws-tilt && !root.lv.adjusting: Btn {
+                    text: @tr("Measure");
+                    kind: BtnKind.accent;
+                    enabled: !Printer.printing;
+                    clicked => { Actions.level-bed("screws-tilt"); }
+                }
+                if root.lv.bed-screws && !root.lv.adjusting: Btn {
+                    text: @tr("Adjust screws");
+                    kind: root.lv.screws-tilt ? BtnKind.normal : BtnKind.accent;
+                    enabled: !Printer.printing;
+                    clicked => { Actions.level-bed("bed-screws"); }
+                }
+                if root.lv.z-tilt && !root.lv.adjusting: Btn {
+                    text: @tr("Level bed tilt");
+                    kind: BtnKind.accent;
+                    enabled: !Printer.printing;
+                    clicked => { Actions.level-bed("z-tilt"); }
+                }
+                if root.lv.gantry && !root.lv.adjusting: Btn {
+                    text: @tr("Level gantry");
+                    kind: BtnKind.accent;
+                    enabled: !Printer.printing;
+                    clicked => { Actions.level-bed("gantry"); }
+                }
+                if !root.lv.adjusting: Rectangle { vertical-stretch: 1; }
+            }
+        }
+    }
+}

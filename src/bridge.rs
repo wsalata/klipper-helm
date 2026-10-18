@@ -64,6 +64,10 @@ pub fn snapshot(ui: &Weak<AppWindow>, s: Snapshot) {
         p.set_mesh(s.mesh.info);
         sync(&p.get_mesh_cells(), s.mesh.cells);
         sync(&p.get_mesh_profiles(), s.mesh.profiles);
+        p.set_level(s.level);
+        sync(&p.get_screws(), s.screws);
+        sync(&p.get_pid_heaters(), s.pid_heaters);
+        p.set_pid_heater(s.pid_heater.into());
         p.set_extruder_temp(s.extruder_temp);
         p.set_has_extruder(s.has_extruder);
         p.set_has_part_fan(s.part_fan.is_some());
@@ -185,6 +189,10 @@ pub fn reset(ui: &Weak<AppWindow>) {
         p.set_mesh(Default::default());
         sync(&p.get_mesh_cells(), Vec::new());
         sync(&p.get_mesh_profiles(), Vec::new());
+        p.set_level(Default::default());
+        sync(&p.get_screws(), Vec::new());
+        sync(&p.get_pid_heaters(), Vec::new());
+        p.set_pid_heater("".into());
         p.set_details(Default::default());
         p.set_job_thumb(Default::default());
         p.set_details_thumb(Default::default());

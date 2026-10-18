@@ -54,6 +54,11 @@ struct Sim {
     mesh_profile: String,
     mesh_profiles: Vec<String>,
     mesh_seed: f64,
+    /// SCREWS_TILT_CALCULATE has run
+    screws_measured: bool,
+    /// BED_SCREWS_ADJUST in progress: (fine pass, current screw)
+    bed_screws: Option<(bool, u32)>,
+    gantry_applied: bool,
     /// Update manager: (name, version, remote version)
     updates: Vec<(&'static str, String, String)>,
 }
@@ -137,6 +142,23 @@ impl Sim {
                 "probed_matrix": if self.mesh_profile.is_empty() { json!([[]]) } else { json!(mock_mesh(self.mesh_seed)) },
                 "profiles": self.mesh_profiles.iter().map(|p| (p.clone(), json!({}))).collect::<serde_json::Map<_, _>>(),
             },
+            "screws_tilt_adjust": {
+                "error": false,
+                "max_deviation": null,
+                "results": if self.screws_measured { json!({
+                    "screw1": { "z": 2.481, "sign": "CW", "adjust": "00:00", "is_base": true, "name": "front left screw" },
+                    "screw2": { "z": 2.512, "sign": "CW", "adjust": "00:12", "is_base": false, "name": "front right screw" },
+                    "screw3": { "z": 2.463, "sign": "CCW", "adjust": "00:06", "is_base": false, "name": "rear right screw" },
+                    "screw4": { "z": 2.480, "sign": "CW", "adjust": "00:00", "is_base": false, "name": "rear left screw" },
+                }) } else { json!({}) },
+            },
+            "bed_screws": {
+                "is_active": self.bed_screws.is_some(),
+                "state": self.bed_screws.map(|(fine, _)| if fine { "fine" } else { "adjust" }),
+                "current_screw": self.bed_screws.map_or(0, |(_, i)| i),
+                "accepted_screws": 0,
+            },
+            "quad_gantry_level": { "applied": self.gantry_applied },
         })
     }
 }
@@ -169,6 +191,9 @@ async fn client(stream: TcpStream) -> anyhow::Result<()> {
         mesh_profile: "default".into(),
         mesh_profiles: vec!["default".into(), "pei_60C".into()],
         mesh_seed: 0.0,
+        screws_measured: false,
+        bed_screws: None,
+        gantry_applied: false,
         updates: vec![
             ("klipper", "v0.13.0-120".into(), "v0.13.0-131".into()),
             ("moonraker", "v0.9.3-40".into(), "v0.9.3-40".into()),
@@ -201,6 +226,7 @@ async fn client(stream: TcpStream) -> anyhow::Result<()> {
                         "webhooks", "configfile", "extruder", "heater_bed", "temperature_sensor raspberry_pi",
                         "fan", "heater_fan hotend_fan", "print_stats", "virtual_sdcard", "display_status",
                         "toolhead", "gcode_move", "idle_timeout", "probe", "bltouch", "manual_probe", "bed_mesh",
+                        "screws_tilt_adjust", "bed_screws", "quad_gantry_level",
                         "gcode_macro PRINT_START", "gcode_macro PRINT_END", "gcode_macro LOAD_FILAMENT",
                         "gcode_macro UNLOAD_FILAMENT", "gcode_macro _HELPER", "gcode_macro BED_MESH_CALIBRATE_FAST",
                         "gcode_macro PARK", "gcode_macro M600",
@@ -248,7 +274,18 @@ async fn client(stream: TcpStream) -> anyhow::Result<()> {
                                     sim.probe_z += dz;
                                 }
                                 Some("ACCEPT") if sim.probe_active => { sim.probe_active = false; sim.save_pending = true; }
-                                Some("ABORT") => sim.probe_active = false,
+                                Some("ACCEPT" | "ADJUSTED") => {
+                                    // Four screws, a coarse pass and then a fine one
+                                    sim.bed_screws = match sim.bed_screws {
+                                        Some((fine, i)) if i < 3 => Some((fine, i + 1)),
+                                        Some((false, _)) => Some((true, 0)),
+                                        _ => None,
+                                    };
+                                }
+                                Some("ABORT") => { sim.probe_active = false; sim.bed_screws = None; }
+                                Some("SCREWS_TILT_CALCULATE") => sim.screws_measured = true,
+                                Some("BED_SCREWS_ADJUST") => sim.bed_screws = Some((false, 0)),
+                                Some("QUAD_GANTRY_LEVEL") => sim.gantry_applied = true,
                                 Some("SAVE_CONFIG") => sim.save_pending = false,
                                 Some("BED_MESH_CALIBRATE") => {
                                     let name = words.next().and_then(|w| w.strip_prefix("PROFILE=")).unwrap_or("default").to_string();

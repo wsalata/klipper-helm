@@ -1,0 +1,117 @@
+import { Theme } from "../theme.slint";
+import { Printer, Overlay, Nav } from "../state.slint";
+import { Btn, BtnKind, Card, Caption } from "../widgets.slint";
+
+// One calibration: what it is, its current state and the way to its page.
+component CalibrationCard inherits Card {
+    in property <string> title;
+    in property <string> state;
+    in property <string> description;
+    in property <int> page;
+
+    HorizontalLayout {
+        padding: 12px;
+        spacing: 12px;
+        VerticalLayout {
+            spacing: 6px;
+            horizontal-stretch: 1;
+            Caption { text: root.title; }
+            Text {
+                text: root.state;
+                color: Theme.text;
+                wrap: word-wrap;
+            }
+            Text {
+                text: root.description;
+                color: Theme.text-dim;
+                font-size: Theme.font-s;
+                wrap: word-wrap;
+                vertical-stretch: 1;
+            }
+        }
+        VerticalLayout {
+            alignment: end;
+            Btn {
+                width: 110px;
+                text: @tr("Open");
+                kind: BtnKind.accent;
+                clicked => { Nav.page = root.page; }
+            }
+        }
+    }
+}
+
+// Calibrations are done rarely, so they live here rather than next to everyday controls:
+// Z offset (11), Bed mesh (12), Bed levelling (14) and Heaters (15) are sub-pages of this one.
+export component CalibrationPage inherits Rectangle {
+    // Two equal columns, whatever the text length
+    property <length> card-width: (root.width - 3 * Theme.gap) / 2;
+
+    VerticalLayout {
+        padding: Theme.gap;
+        spacing: Theme.gap;
+
+        HorizontalLayout {
+            spacing: Theme.gap;
+            vertical-stretch: 1;
+            CalibrationCard {
+                width: root.card-width;
+                title: @tr("Z offset");
+                state: Printer.calibration.has-probe ? @tr("Probe offset (e.g. BLTouch)") : @tr("Z endstop position");
+                description: @tr("Paper test: sets the distance between the nozzle and the bed.");
+                page: 11;
+            }
+            CalibrationCard {
+                width: root.card-width;
+                title: @tr("Bed mesh");
+                state: Printer.mesh.profile == "" ? @tr("No mesh loaded") : @tr("Profile: {}", Printer.mesh.profile);
+                description: Printer.mesh.available
+                    ? @tr("Probes the bed surface and manages saved mesh profiles.")
+                    : @tr("Bed mesh is not configured in Klipper ([bed_mesh] section).");
+                page: 12;
+            }
+        }
+
+        HorizontalLayout {
+            spacing: Theme.gap;
+            vertical-stretch: 1;
+            CalibrationCard {
+                width: root.card-width;
+                title: @tr("Bed levelling");
+                state: Printer.level.screws-tilt || Printer.level.bed-screws ? @tr("Bed screws")
+                    : Printer.level.gantry ? @tr("Gantry")
+                    : Printer.level.z-tilt ? @tr("Bed tilt")
+                    : @tr("Not configured");
+                description: @tr("Levels the bed with its screws or with several Z motors.");
+                page: 14;
+            }
+            CalibrationCard {
+                width: root.card-width;
+                title: @tr("Heaters");
+                state: Printer.pid-heater != "" ? @tr("Calibrating") : @tr("PID tuning");
+                description: @tr("Tunes how the nozzle and the bed hold their temperature.");
+                page: 15;
+            }
+        }
+
+        if Printer.calibration.save-pending && !Printer.calibration.active: Card {
+            HorizontalLayout {
+                padding: 12px;
+                spacing: Theme.gap;
+                Text {
+                    text: @tr("The new value is ready. Saving it writes the printer configuration and restarts Klipper.");
+                    color: Theme.warn;
+                    font-size: Theme.font-s;
+                    wrap: word-wrap;
+                    vertical-alignment: center;
+                }
+                Btn {
+                    width: 240px;
+                    text: @tr("Save and restart");
+                    kind: BtnKind.accent;
+                    clicked => { Overlay.ask(@tr("Save the configuration and restart Klipper?"), "gcode", "SAVE_CONFIG"); }
+                }
+            }
+        }
+    }
+}

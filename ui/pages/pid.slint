@@ -1,0 +1,113 @@
+import { Theme } from "../theme.slint";
+import { Printer, Actions, Overlay, Heater, Strings } from "../state.slint";
+import { Btn, BtnKind, Card, Caption, Stepper } from "../widgets.slint";
+
+component Hint inherits Text {
+    color: Theme.text-dim;
+    font-size: Theme.font-s;
+    wrap: word-wrap;
+}
+
+// PID tuning of a heater (PID_CALIBRATE): Klipper heats it to the target, measures how it
+// responds and keeps the result until SAVE_CONFIG. The request is answered when it ends.
+export component PidPage inherits Rectangle {
+    property <string> selected;
+    // Until a heater is picked: the first one (the nozzle)
+    property <string> heater: root.selected != "" ? root.selected
+        : Printer.pid-heaters.length > 0 ? Printer.pid-heaters[0].id : "";
+    property <float> target: 210;
+    property <bool> running: Printer.pid-heater != "";
+
+    function select(h: Heater) {
+        root.selected = h.id;
+        root.target = h.role == "nozzle" ? 210 : h.role == "bed" ? 60 : 50;
+    }
+
+    HorizontalLayout {
+        padding: Theme.gap;
+        spacing: Theme.gap;
+
+        Card {
+            horizontal-stretch: 1;
+            VerticalLayout {
+                padding: 12px;
+                spacing: 10px;
+                Caption { text: @tr("Heater"); }
+                if Printer.pid-heaters.length == 0: Hint { text: @tr("No heaters found."); }
+                Flickable {
+                    vertical-stretch: 1;
+                    content-height: list.preferred-height;
+                    list := VerticalLayout {
+                        alignment: start;
+                        spacing: 6px;
+                        for h in Printer.pid-heaters: Btn {
+                            text: Strings.heater-name(h) + "   " + round(h.temp) + "°";
+                            active: h.id == (root.running ? Printer.pid-heater : root.heater);
+                            enabled: !root.running;
+                            clicked => { root.select(h); }
+                        }
+                    }
+                }
+                Hint {
+                    text: @tr("The heater is heated to the target and its response is measured, so that it holds the temperature steadily. It takes a few minutes; use your usual printing temperature.");
+                }
+            }
+        }
+
+        Card {
+            width: 320px;
+            VerticalLayout {
+                padding: 12px;
+                spacing: Theme.gap;
+
+                if !root.running: Stepper {
+                    label: @tr("Target");
+                    value: round(root.target) + "°C";
+                    minus => { root.target = max(30, root.target - 5); }
+                    plus => { root.target = min(350, root.target + 5); }
+                }
+                if !root.running: Btn {
+                    text: @tr("Start calibration");
+                    kind: BtnKind.accent;
+                    enabled: !Printer.printing && root.heater != "";
+                    clicked => { Actions.calibrate-pid(root.heater, root.target); }
+                }
+
+                if root.running: Caption { text: @tr("Calibrating"); }
+                for h in Printer.pid-heaters: VerticalLayout {
+                    spacing: 6px;
+                    if h.id == Printer.pid-heater: Text {
+                        text: Strings.heater-name(h);
+                        color: Theme.text;
+                        font-size: Theme.font-l;
+                        font-weight: 600;
+                        horizontal-alignment: center;
+                    }
+                    if h.id == Printer.pid-heater: Text {
+                        text: round(h.temp) + "° / " + round(h.target) + "°";
+                        color: Theme.hot;
+                        font-size: 48px;
+                        font-weight: 700;
+                        horizontal-alignment: center;
+                    }
+                }
+                if root.running: Hint {
+                    text: @tr("Wait until Klipper reports the result. The emergency stop interrupts the calibration.");
+                }
+
+                Rectangle { vertical-stretch: 1; }
+                if Printer.calibration.save-pending && !root.running: Text {
+                    text: @tr("The new value is ready. Saving it writes the printer configuration and restarts Klipper.");
+                    color: Theme.warn;
+                    font-size: Theme.font-s;
+                    wrap: word-wrap;
+                }
+                if Printer.calibration.save-pending && !root.running: Btn {
+                    text: @tr("Save and restart");
+                    kind: BtnKind.accent;
+                    clicked => { Overlay.ask(@tr("Save the configuration and restart Klipper?"), "gcode", "SAVE_CONFIG"); }
+                }
+            }
+        }
+    }
+}

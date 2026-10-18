@@ -131,6 +131,30 @@ export struct MeshProfile {
     active: bool,
 }
 
+// Bed levelling: whichever of Klipper's helpers is configured
+export struct BedLevel {
+    screws-tilt: bool,       // [screws_tilt_adjust]: SCREWS_TILT_CALCULATE with a probe
+    bed-screws: bool,        // [bed_screws]: BED_SCREWS_ADJUST, paper test at each screw
+    z-tilt: bool,            // [z_tilt]: Z_TILT_ADJUST
+    gantry: bool,            // [quad_gantry_level]: QUAD_GANTRY_LEVEL
+    tilt-applied: bool,      // z_tilt / quad_gantry_level applied since Klipper started
+    max-deviation: string,   // screws_tilt_adjust, "" when unknown
+    deviation-error: bool,   // the screws differ by more than max_deviation
+    adjusting: bool,         // BED_SCREWS_ADJUST waits for ACCEPT / ADJUSTED / ABORT
+    fine: bool,              // its second, fine adjustment pass
+    screw: int,              // screw being adjusted, from 1
+}
+
+// One screw from SCREWS_TILT_CALCULATE
+export struct ScrewAdjust {
+    number: int,       // from 1, as screw1, screw2... in the config
+    name: string,      // configured name, "" when Klipper does not report it
+    base: bool,        // reference screw, not turned
+    clockwise: bool,
+    turns: string,     // "HH:MM": full turns and minutes (60 per turn)
+    z: string,
+}
+
 export global Printer {
     in property <Conn> conn: Conn.connecting;
     in property <Status> status: Status.connecting;
@@ -158,6 +182,11 @@ export global Printer {
     // Back row first, `mesh.cols` per row
     in property <[MeshCell]> mesh-cells;
     in property <[MeshProfile]> mesh-profiles;
+    in property <BedLevel> level;
+    in property <[ScrewAdjust]> screws;
+    // Heaters PID_CALIBRATE works with, and the one being tuned ("" when none)
+    in property <[Heater]> pid-heaters;
+    in property <string> pid-heater;
     in property <float> extruder-temp;
     in property <bool> has-extruder;
     in property <[string]> macros;
@@ -281,6 +310,10 @@ export global Actions {
     callback calibrate-z(string);
     // Profile name, "" for "default"
     callback calibrate-mesh(string);
+    // "screws-tilt", "bed-screws", "z-tilt" or "gantry"
+    callback level-bed(string);
+    // Heater object, target temperature
+    callback calibrate-pid(string, float);
     callback pause();
     callback resume();
     callback cancel();
