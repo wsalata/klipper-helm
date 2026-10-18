@@ -266,7 +266,7 @@ impl<'a> Session<'a> {
                 }
             }
             "notify_gcode_response" => {
-                if let Some(line) = params[0].as_str() {
+                if let Some(line) = params[0].as_str().filter(|l| !bridge::is_temperature_report(l)) {
                     bridge::console(&self.ui, vec![bridge::console_line(line)]);
                 }
             }
@@ -336,7 +336,11 @@ impl<'a> Session<'a> {
                     .flatten()
                     .filter_map(|e| {
                         let msg = e.get("message")?.as_str()?;
-                        Some(if e.get("type").and_then(Value::as_str) == Some("command") {
+                        let command = e.get("type").and_then(Value::as_str) == Some("command");
+                        if !command && bridge::is_temperature_report(msg) {
+                            return None;
+                        }
+                        Some(if command {
                             ConsoleLine { text: msg.into(), kind: 1 }
                         } else {
                             bridge::console_line(msg)

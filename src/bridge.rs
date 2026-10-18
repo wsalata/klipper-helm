@@ -204,6 +204,21 @@ pub fn console_line(text: &str) -> ConsoleLine {
     ConsoleLine { text: text.into(), kind }
 }
 
+/// Automatic temperature reports ("B:60.1 /60.0 T0:215.3 /215.0", "ok T:...") that Klipper sends
+/// during PID_CALIBRATE, M109/M190 and M105; hidden like Mainsail does (`^(?:ok\s+)?(B|C|T\d*):`).
+pub fn is_temperature_report(text: &str) -> bool {
+    let text = match text.strip_prefix("ok") {
+        Some(rest) if rest.starts_with(char::is_whitespace) => rest.trim_start(),
+        _ => text,
+    };
+    let rest = match text.as_bytes().first() {
+        Some(b'B' | b'C') => &text[1..],
+        Some(b'T') => text[1..].trim_start_matches(|c: char| c.is_ascii_digit()),
+        _ => return false,
+    };
+    rest.starts_with(':')
+}
+
 /// New update manager status: the list, and whether Moonraker is still working.
 pub fn updates(ui: &Weak<AppWindow>, status: UpdateStatus) {
     let _ = ui.upgrade_in_event_loop(move |ui| {
@@ -248,4 +263,19 @@ pub fn toast(ui: &Weak<AppWindow>, text: impl Into<SharedString>) {
 /// Translated "no connection to Moonraker" toast.
 pub fn no_connection(ui: &Weak<AppWindow>) {
     let _ = ui.upgrade_in_event_loop(|ui| ui.global::<Messages>().invoke_no_connection());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn temperature_reports() {
+        for t in ["B:23.2 /0.0 T0:223.8 /215.0", "ok T:21.0 /0.0 B:22.0 /0.0", "T:210.0 /210.0", "C:30.0"] {
+            assert!(is_temperature_report(t), "{t}");
+        }
+        for t in ["// PID parameters: pid_Kp=22.2", "BED_MESH_CALIBRATE", "ok", "Toolhead: X:10", "!! Move out of range"] {
+            assert!(!is_temperature_report(t), "{t}");
+        }
+    }
 }
