@@ -23,6 +23,7 @@ POLKIT_RULE=/etc/polkit-1/rules.d/50-klipper-helm.rules
 STATE_DIR=/var/lib/klipper-helm
 SECTION="[update_manager klipper-helm]"
 THEME_DIR=/usr/share/plymouth/themes/klipper-helm
+EDID_HOOK=/etc/initramfs-tools/hooks/klipper-helm-edid
 SPLASH_STATE="$STATE_DIR/boot-splash"
 USER=${USER:-$(id -un)}
 
@@ -142,6 +143,23 @@ install_boot_splash() {
 	local previous
 	previous=$(plymouth-set-default-theme 2>/dev/null || true)
 	[ "$previous" = klipper-helm ] && previous=""
+	# Plymouth puts the graphics driver into the initramfs, where it starts before the root
+	# filesystem: a corrected EDID (drm.edid_firmware=, see README "Troubleshooting") must be
+	# there too, or the screen stays black
+	if compgen -G "/lib/firmware/edid/*.bin" >/dev/null; then
+		sudo tee "$EDID_HOOK" >/dev/null <<'EOF'
+#!/bin/sh
+# Klipper Helm: corrected screen EDIDs (/lib/firmware/edid) for the graphics driver in the initramfs
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in prereqs) prereqs; exit 0 ;; esac
+. /usr/share/initramfs-tools/hook-functions
+for f in /lib/firmware/edid/*.bin; do
+	[ -e "$f" ] && copy_file firmware "$f"
+done
+EOF
+		sudo chmod 755 "$EDID_HOOK"
+	fi
 	# Also rebuilds the initramfs, so the splash appears before the root filesystem is mounted
 	sudo plymouth-set-default-theme -R klipper-helm
 	edit_boot_files "$boot" apply "$previous"

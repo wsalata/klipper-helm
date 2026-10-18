@@ -41,10 +41,16 @@ fn item(name: &str, info: &Value) -> UpdateItem {
     let version = s("version");
     let remote = s("remote_version");
     let valid = info.get("is_valid").and_then(Value::as_bool).unwrap_or(true);
-    let behind = info.get("commits_behind").and_then(Value::as_array).map_or(0, Vec::len);
+    // As in Mainsail: git repositories by the commits they are behind, the rest only when the
+    // remote version is newer (Moonraker may still hold an older one from its last check)
+    let available = if s("configured_type") == "git_repo" {
+        info.get("commits_behind").and_then(Value::as_array).is_some_and(|c| !c.is_empty())
+    } else {
+        is_newer(&remote, &version)
+    };
     let state = if !valid || flag("corrupt") {
         "invalid"
-    } else if behind > 0 || (!remote.is_empty() && remote != "?" && remote != version) {
+    } else if available {
         "available"
     } else {
         "up-to-date"
@@ -55,6 +61,39 @@ fn item(name: &str, info: &Value) -> UpdateItem {
         remote: if remote == "?" { String::new() } else { remote }.into(),
         state: state.into(),
         packages: 0,
+    }
+}
+
+/// "v1.2.3", "1.2.3-beta.1" or "v0.13.0-120" (a git describe: 120 commits after the tag).
+/// Compared by the numbers; on equal numbers a release is newer than a pre-release, and a
+/// later commit count newer than an earlier one. Unparsable versions: newer when different.
+fn is_newer(remote: &str, local: &str) -> bool {
+    fn parse(v: &str) -> Option<(Vec<u64>, Option<String>)> {
+        let v = v.trim().trim_start_matches('v');
+        let (core, suffix) = match v.split_once('-') {
+            Some((c, s)) => (c, Some(s.to_string())),
+            None => (v, None),
+        };
+        let numbers = core.split('.').map(|n| n.parse().ok()).collect::<Option<Vec<u64>>>()?;
+        Some((numbers, suffix))
+    }
+    if remote.is_empty() || remote == "?" || remote == local {
+        return false;
+    }
+    let (Some((r, rs)), Some((l, ls))) = (parse(remote), parse(local)) else { return true };
+    if r != l {
+        return r > l;
+    }
+    // Commits after the tag ("-120"), else a pre-release ("-beta.1") below the release
+    let count = |s: &Option<String>| s.as_deref().and_then(|s| s.split('-').next()?.parse::<u64>().ok());
+    match (&rs, &ls) {
+        (None, None) => false,
+        (None, Some(_)) => count(&ls).is_none(),
+        (Some(_), None) => count(&rs).is_some(),
+        (Some(a), Some(b)) => match (count(&rs), count(&ls)) {
+            (Some(x), Some(y)) => x > y,
+            _ => a > b,
+        },
     }
 }
 
@@ -97,5 +136,32 @@ mod tests {
             ]
         );
         assert_eq!(last_line("Downloading...\nExtracting\n\n"), "Extracting");
+    }
+
+    #[test]
+    fn versions() {
+        assert!(is_newer("v0.4.0", "v0.3.2"));
+        assert!(!is_newer("v0.3.2", "v0.4.0"));
+        assert!(!is_newer("v0.4.0", "v0.4.0"));
+        assert!(is_newer("v0.10.0", "v0.9.9"));
+        assert!(is_newer("v0.13.0-131", "v0.13.0-120"));
+        assert!(!is_newer("v0.13.0-120", "v0.13.0-131"));
+        assert!(is_newer("v1.0.0", "v1.0.0-beta.2"));
+        assert!(!is_newer("v1.0.0-beta.2", "v1.0.0"));
+        assert!(is_newer("v1.0.0-beta.2", "v1.0.0-beta.1"));
+        assert!(!is_newer("", "v1.0.0"));
+        assert!(!is_newer("?", "v1.0.0"));
+        assert!(is_newer("nightly-2", "nightly-1"));
+    }
+
+    #[test]
+    fn older_remote_is_not_an_update() {
+        let status = parse_status(&json!({ "version_info": {
+            "klipper-helm": { "configured_type": "executable", "version": "v0.4.0",
+                              "remote_version": "v0.3.2", "is_valid": true },
+            "klipper": { "configured_type": "git_repo", "version": "v0.13.0-120",
+                         "remote_version": "v0.13.0-131", "is_valid": true, "commits_behind": [] },
+        }}));
+        assert!(status.items.iter().all(|i| i.state == "up-to-date"));
     }
 }

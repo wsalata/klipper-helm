@@ -73,7 +73,7 @@ curl -fsSL https://raw.githubusercontent.com/wsalata/klipper-helm/main/install.s
 ```
 
 It installs Plymouth with the theme from [packaging/plymouth](packaging/plymouth) (rebuilding the
-initramfs), adds `disable_splash=1` to `config.txt`, and in `cmdline.txt` moves the console to `tty3` and
+initramfs, together with corrected screen EDIDs from `/lib/firmware/edid` if there are any), adds `disable_splash=1` to `config.txt`, and in `cmdline.txt` moves the console to `tty3` and
 adds `quiet splash loglevel=3 logo.nologo vt.global_cursor_default=0 plymouth.ignore-serial-consoles`.
 Both files are backed up first (`*.klipper-helm.bak`); `--uninstall` undoes exactly these changes. The
 logo is rendered from the panel itself by `packaging/plymouth/make-logo.sh`; run it again if the welcome
@@ -156,6 +156,12 @@ boot screen. On the printer's computer:
    Then edit `/boot/firmware/cmdline.txt`: it is a single line; remove any `video=…` and append
    ` drm.edid_firmware=HDMI-A-1:edid/screen-1024x600.bin` to it. If the system no longer boots, restore
    `cmdline.txt.bak` from the SD card's `bootfs` partition on another computer.
+
+   If the graphics driver starts from the initramfs (as with Plymouth, so with `--boot-splash`), the file
+   must be in the initramfs too, or `dmesg` shows `Direct firmware load for edid/… failed with error -2`
+   and the screen stays black. `install.sh --boot-splash` takes care of it when the file exists
+   (`/etc/initramfs-tools/hooks/klipper-helm-edid`); after installing the splash first, run
+   `bash install.sh --boot-splash` again, or `sudo update-initramfs -u -k all` once the hook is there.
 
 3. Set the same resolution for the boot screen, at the end of `/boot/firmware/config.txt` (the
    manufacturer's setting; giving the firmware the EDID file with `hdmi_edid_file` instead showed a
