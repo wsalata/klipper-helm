@@ -1,5 +1,5 @@
 import { Theme } from "theme.slint";
-import { Heater, Strings, Screensaver } from "state.slint";
+import { Heater, Strings, Screensaver, Actions } from "state.slint";
 
 // danger-outline: a destructive action that is not an emergency (e.g. cancelling a print)
 export enum BtnKind { normal, accent, danger, danger-outline, ghost }
@@ -19,7 +19,8 @@ export component Btn inherits Rectangle {
         : root.kind == BtnKind.danger ? Theme.danger
         : root.kind == BtnKind.ghost || root.kind == BtnKind.danger-outline ? transparent
         : Theme.surface-2;
-    property <color> fg: !root.enabled ? Theme.text-dim
+    // Disabled keys are hollow with faded text, clearly apart from any working key
+    property <color> fg: !root.enabled ? Theme.text-dim.transparentize(0.55)
         : (root.active || root.kind == BtnKind.accent) ? Theme.on-accent
         : root.kind == BtnKind.danger ? #ffffff
         : root.kind == BtnKind.danger-outline ? Theme.danger-text
@@ -33,9 +34,11 @@ export component Btn inherits Rectangle {
     accessible-label: root.text;
     accessible-enabled: root.enabled;
     accessible-action-default => { root.clicked(); }
-    border-width: root.kind == BtnKind.ghost || root.kind == BtnKind.danger-outline ? 1px : 0px;
-    border-color: root.kind == BtnKind.danger-outline ? Theme.danger-border : Theme.border;
-    background: !root.enabled ? Theme.surface
+    // Disabled keys keep only a faint outline
+    border-width: !root.enabled || root.kind == BtnKind.ghost || root.kind == BtnKind.danger-outline ? 1px : 0px;
+    border-color: !root.enabled ? Theme.border.transparentize(0.4)
+        : root.kind == BtnKind.danger-outline ? Theme.danger-border : Theme.border;
+    background: !root.enabled ? transparent
         : ta.pressed ? (root.base == transparent ? Theme.surface-2 : root.base.darker(0.35))
         : root.base;
     animate background { duration: 80ms; }
@@ -168,13 +171,60 @@ export component InfoRow inherits HorizontalLayout {
     }
 }
 
-// Step adjustment with - and + (speed, flow, Z offset, fan).
+// Fan speed presets. The tapped preset lights up at once; Klipper applies M106 only after the
+// moves already queued, so its reported speed follows a moment later.
+export component FanSpeeds inherits HorizontalLayout {
+    in property <string> fan-id;
+    in property <float> speed;
+    // Preset tapped since the last speed report, -1 when none
+    property <int> chosen: -1;
+    changed speed => { root.chosen = -1; }
+    spacing: 4px;
+    for v in [0, 25, 50, 75, 100]: Btn {
+        text: v + "";
+        font-size: Theme.font-s;
+        min-height: 40px;
+        active: (root.chosen >= 0 ? root.chosen : round(root.speed * 100)) == v;
+        clicked => {
+            root.chosen = v;
+            Actions.set-fan(root.fan-id, v / 100);
+        }
+    }
+}
+
+// "label  value" box whose value is a key that opens the numpad.
+export component ValueBox inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+    callback clicked();
+    // Darker than the keys inside, so they read as buttons
+    background: Theme.bg;
+    border-radius: Theme.radius-l;
+    height: 80px;
+    preferred-width: 200px;
+    horizontal-stretch: 1;
+    HorizontalLayout {
+        padding: 12px;
+        spacing: 10px;
+        Caption { text: root.label; overflow: elide; horizontal-stretch: 1; }
+        Btn {
+            text: root.value;
+            width: 120px;
+            font-size: Theme.font-l;
+            accessible-label: root.label;
+            clicked => { root.clicked(); }
+        }
+    }
+}
+
+// Step adjustment with - and + (Z offset).
 export component Stepper inherits Rectangle {
     in property <string> label;
     in property <string> value;
     callback minus();
     callback plus();
-    background: Theme.surface-2;
+    // Darker than the keys inside, so they read as buttons
+    background: Theme.bg;
     border-radius: Theme.radius-l;
     height: 80px;
     // Equal widths side by side

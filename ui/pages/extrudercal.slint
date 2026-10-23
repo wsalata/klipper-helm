@@ -1,0 +1,179 @@
+import { Theme } from "../theme.slint";
+import { Printer, Actions, Overlay, ExtruderMeasure } from "../state.slint";
+import { Btn, BtnKind, Card, Caption, InfoRow, SettingRow } from "../widgets.slint";
+
+component Hint inherits Text {
+    color: Theme.text-dim;
+    font-size: Theme.font-s;
+    wrap: word-wrap;
+}
+
+// Numbered step of the procedure, with its controls on the right.
+component Step inherits HorizontalLayout {
+    in property <int> number;
+    in property <string> text;
+    spacing: 10px;
+    VerticalLayout {
+        alignment: center;
+        Rectangle {
+            width: 28px;
+            height: 28px;
+            border-radius: 14px;
+            background: Theme.surface-2;
+            Text {
+                text: root.number;
+                color: Theme.accent;
+                font-weight: 700;
+            }
+        }
+    }
+    Text {
+        text: root.text;
+        color: Theme.text;
+        font-size: Theme.font-s;
+        wrap: word-wrap;
+        vertical-alignment: center;
+        horizontal-stretch: 1;
+    }
+    @children
+}
+
+// Extruder calibration as in Klipper's rotation_distance guide: mark the filament 120 mm above
+// the extruder, extrude 100 mm, measure what is left. new = current * extruded / requested.
+export component ExtruderCalibratePage inherits Rectangle {
+    property <float> mark: 120;
+    property <float> length: 100;
+    property <float> extruded: root.mark - ExtruderMeasure.remaining;
+    property <float> new-distance: Printer.extruder-cal.current * root.extruded / root.length;
+    // Within 30%: anything further off is a misread mark, not a calibration
+    property <bool> plausible: ExtruderMeasure.remaining > 0 && root.extruded >= 70 && root.extruded <= 130;
+    property <bool> cold: Printer.extruder-temp < Printer.extruder-cal.min-temp;
+    property <float> heat-to: Printer.presets.length > 0 ? Printer.presets[0].extruder : 210;
+
+    HorizontalLayout {
+        padding: Theme.gap;
+        spacing: Theme.gap;
+
+        Card {
+            horizontal-stretch: 1;
+            VerticalLayout {
+                padding: 12px;
+                spacing: 10px;
+
+                Step {
+                    number: 1;
+                    text: @tr("Heat the nozzle to the printing temperature.");
+                    Text {
+                        text: round(Printer.extruder-temp) + "°";
+                        color: root.cold ? Theme.warn : Theme.text;
+                        font-size: Theme.font-l;
+                        font-weight: 700;
+                        vertical-alignment: center;
+                    }
+                    Btn {
+                        width: 150px;
+                        text: @tr("Heat to {}°", round(root.heat-to));
+                        clicked => { Actions.set-temp("extruder", root.heat-to); }
+                    }
+                }
+                Step {
+                    number: 2;
+                    text: @tr("Mark the filament {} mm above the extruder entry.", root.mark);
+                }
+                Step {
+                    number: 3;
+                    text: root.cold
+                        ? @tr("Extrude {} mm slowly. Too cold to extrude (min. {}°).", root.length, round(Printer.extruder-cal.min-temp))
+                        : @tr("Extrude {} mm slowly (about 2 minutes) and wait until the motor stops.", root.length);
+                    Btn {
+                        width: 190px;
+                        text: @tr("Extrude {} mm", root.length);
+                        kind: BtnKind.accent;
+                        enabled: !root.cold && !Printer.printing && Printer.extruder-cal.available;
+                        clicked => { Actions.measure-extrude(root.length); }
+                    }
+                }
+                Step {
+                    number: 4;
+                    text: @tr("Measure the filament left between the extruder entry and the mark.");
+                }
+                SettingRow {
+                    label: @tr("Left to the mark");
+                    value: ExtruderMeasure.remaining.to-fixed(1) + " mm";
+                    clicked => { Overlay.ask-extruder-mark(); }
+                }
+                Rectangle { vertical-stretch: 1; }
+            }
+        }
+
+        Card {
+            width: 300px;
+            VerticalLayout {
+                padding: 12px;
+                spacing: 8px;
+
+                Caption { text: @tr("Rotation distance"); }
+                if !Printer.extruder-cal.available: Hint {
+                    text: @tr("No rotation_distance in the [extruder] section of the Klipper config.");
+                }
+                if Printer.extruder-cal.available: InfoRow {
+                    label: @tr("Current");
+                    value: Printer.extruder-cal.current.to-fixed(3);
+                }
+                if Printer.extruder-cal.available: InfoRow {
+                    label: @tr("Extruded");
+                    value: root.extruded.to-fixed(1) + " mm";
+                }
+                if Printer.extruder-cal.available: Text {
+                    text: root.plausible ? root.new-distance.to-fixed(3) : "-";
+                    color: Theme.accent;
+                    font-family: Theme.display;
+                    font-size: 40px;
+                    font-weight: 700;
+                    horizontal-alignment: center;
+                }
+                if Printer.extruder-cal.available && !root.plausible: Hint {
+                    text: @tr("This is more than 30% off; check the mark and measure again.");
+                    color: Theme.warn;
+                }
+                if Printer.extruder-cal.available: Btn {
+                    text: @tr("Apply");
+                    kind: BtnKind.accent;
+                    enabled: root.plausible && ExtruderMeasure.remaining != root.mark - root.length && !Printer.printing;
+                    clicked => {
+                        Actions.set-rotation-distance(root.new-distance);
+                        // The next measurement starts from the new value
+                        ExtruderMeasure.remaining = root.mark - root.length;
+                    }
+                }
+
+                Rectangle { vertical-stretch: 1; }
+
+                if Printer.extruder-cal.unsaved && Printer.extruder-cal.save != "saving": Hint {
+                    text: @tr("In use until Klipper restarts; printer.cfg still has {}.", Printer.extruder-cal.configured.to-fixed(3));
+                    color: Theme.warn;
+                }
+                if Printer.extruder-cal.save == "saving": Hint { text: @tr("Saving..."); }
+                if Printer.extruder-cal.save == "saved": Hint {
+                    text: @tr("Saved in printer.cfg.");
+                    color: Theme.ok;
+                }
+                if Printer.extruder-cal.save == "not-found": Hint {
+                    text: @tr("printer.cfg has no rotation_distance in [extruder] (it may be in an included file). Set it to {} there.", Printer.extruder-cal.current.to-fixed(3));
+                    color: Theme.warn;
+                }
+                if Printer.extruder-cal.save == "error": Hint {
+                    text: @tr("Could not save: {}", Printer.extruder-cal.save-error);
+                    color: Theme.danger-text;
+                }
+                if Printer.extruder-cal.unsaved: Btn {
+                    text: @tr("Save in printer.cfg");
+                    enabled: Printer.extruder-cal.save != "saving" && !Printer.printing;
+                    clicked => {
+                        Overlay.ask(@tr("Write rotation_distance: {} into printer.cfg?", Printer.extruder-cal.current.to-fixed(3)), "save-rotation-distance", "");
+                    }
+                }
+            }
+        }
+    }
+}

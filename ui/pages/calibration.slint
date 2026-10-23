@@ -1,51 +1,56 @@
 import { Theme } from "../theme.slint";
-import { Printer, Overlay, Nav } from "../state.slint";
+import { Printer, Overlay, Nav, Screensaver } from "../state.slint";
 import { Btn, BtnKind, Card, Caption } from "../widgets.slint";
 
-// One calibration: what it is, its current state and the way to its page.
+// One calibration: what it is and its current state; tapping it opens its page.
 component CalibrationCard inherits Card {
     in property <string> title;
     in property <string> state;
     in property <string> description;
     in property <int> page;
 
-    HorizontalLayout {
+    background: ta.pressed ? Theme.surface-2 : Theme.surface;
+    accessible-role: button;
+    accessible-label: root.title;
+    accessible-action-default => { Nav.page = root.page; }
+
+    VerticalLayout {
         padding: 12px;
-        spacing: 12px;
-        VerticalLayout {
-            spacing: 6px;
-            horizontal-stretch: 1;
-            Caption { text: root.title; }
-            Text {
-                text: root.state;
-                color: Theme.text;
-                wrap: word-wrap;
-            }
-            Text {
-                text: root.description;
-                color: Theme.text-dim;
-                font-size: Theme.font-s;
-                wrap: word-wrap;
-                vertical-stretch: 1;
+        spacing: 6px;
+        HorizontalLayout {
+            Caption { text: root.title; horizontal-stretch: 1; }
+            Image {
+                source: @image-url("../icons/right.svg");
+                colorize: Theme.accent;
+                width: 20px;
+                height: 20px;
             }
         }
-        VerticalLayout {
-            alignment: end;
-            Btn {
-                width: 110px;
-                text: @tr("Open");
-                kind: BtnKind.accent;
-                clicked => { Nav.page = root.page; }
-            }
+        Text {
+            text: root.state;
+            color: Theme.text;
+            wrap: word-wrap;
         }
+        Text {
+            text: root.description;
+            color: Theme.text-dim;
+            font-size: Theme.font-s;
+            wrap: word-wrap;
+            vertical-stretch: 1;
+        }
+    }
+
+    ta := TouchArea {
+        pointer-event(e) => { if (e.kind == PointerEventKind.down) { Screensaver.activity(); } }
+        clicked => { Nav.page = root.page; }
     }
 }
 
 // Calibrations are done rarely, so they live here rather than next to everyday controls:
-// Z offset (11), Bed mesh (12), Bed levelling (14) and Heaters (15) are sub-pages of this one.
+// Z offset (11), Bed mesh (12), Bed levelling (14), Heaters (15) and Extruder (16) are sub-pages of this one.
 export component CalibrationPage inherits Rectangle {
-    // Two equal columns, whatever the text length
-    property <length> card-width: (root.width - 3 * Theme.gap) / 2;
+    // Three equal columns, whatever the text length
+    property <length> card-width: (root.width - 4 * Theme.gap) / 3;
 
     VerticalLayout {
         padding: Theme.gap;
@@ -70,11 +75,6 @@ export component CalibrationPage inherits Rectangle {
                     : @tr("Bed mesh is not configured in Klipper ([bed_mesh] section).");
                 page: 12;
             }
-        }
-
-        HorizontalLayout {
-            spacing: Theme.gap;
-            vertical-stretch: 1;
             CalibrationCard {
                 width: root.card-width;
                 title: @tr("Bed levelling");
@@ -85,12 +85,27 @@ export component CalibrationPage inherits Rectangle {
                 description: @tr("Levels the bed with its screws or with several Z motors.");
                 page: 14;
             }
+        }
+
+        // One card fewer than the first row: same width, centred
+        HorizontalLayout {
+            spacing: Theme.gap;
+            vertical-stretch: 1;
+            alignment: center;
             CalibrationCard {
                 width: root.card-width;
                 title: @tr("Heaters");
                 state: Printer.pid-heater != "" ? @tr("Calibrating") : @tr("PID tuning");
                 description: @tr("Tunes how the nozzle and the bed hold their temperature.");
                 page: 15;
+            }
+            CalibrationCard {
+                width: root.card-width;
+                title: @tr("Extruder");
+                state: !Printer.extruder-cal.available ? @tr("Not configured")
+                    : @tr("Rotation distance {}", Printer.extruder-cal.current.to-fixed(3));
+                description: @tr("Makes the extruder push exactly as much filament as requested.");
+                page: 16;
             }
         }
 

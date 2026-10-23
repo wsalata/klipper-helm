@@ -155,6 +155,18 @@ export struct ScrewAdjust {
     z: string,
 }
 
+// Extruder calibration (rotation_distance). Klipper's SAVE_CONFIG does not keep this value:
+// SET_EXTRUDER_ROTATION_DISTANCE applies it until a restart, and the panel can write it into printer.cfg.
+export struct ExtruderCalibration {
+    available: bool,     // [extruder] with rotation_distance in the config
+    current: float,      // rotation distance in use now
+    configured: float,   // as in the config
+    unsaved: bool,       // `current` was set since Klipper started and is not in printer.cfg yet
+    min-temp: float,     // min_extrude_temp
+    save: string,        // writing printer.cfg: "", "saving", "saved", "not-found" or "error"
+    save-error: string,
+}
+
 export global Printer {
     in property <Conn> conn: Conn.connecting;
     in property <Status> status: Status.connecting;
@@ -187,9 +199,13 @@ export global Printer {
     // Heaters PID_CALIBRATE works with, and the one being tuned ("" when none)
     in property <[Heater]> pid-heaters;
     in property <string> pid-heater;
+    in property <ExtruderCalibration> extruder-cal;
     in property <float> extruder-temp;
     in property <bool> has-extruder;
     in property <[string]> macros;
+    // Filament load/unload macros, "" when the printer has none
+    in property <string> load-macro;
+    in property <string> unload-macro;
     in property <[FileEntry]> files;
     in property <FileDetails> details;
     in property <image> details-thumb;
@@ -314,6 +330,11 @@ export global Actions {
     callback level-bed(string);
     // Heater object, target temperature
     callback calibrate-pid(string, float);
+    // Extruder calibration: slow extrusion of this many mm, a new rotation distance until
+    // Klipper restarts, and writing the one in use into printer.cfg
+    callback measure-extrude(float);
+    callback set-rotation-distance(float);
+    callback save-rotation-distance();
     callback pause();
     callback resume();
     callback cancel();
@@ -423,6 +444,12 @@ export global Screensaver {
     }
 }
 
+// Extruder calibration: filament left between the extruder and the mark after extruding,
+// measured by the user (kept here so the numpad can set it)
+export global ExtruderMeasure {
+    in-out property <float> remaining: 20;
+}
+
 export global Nav {
     in-out property <int> page: 0;
 }
@@ -430,7 +457,8 @@ export global Nav {
 // State of dialogs drawn over the screens (numpad, confirmation, text editor, file).
 export global Overlay {
     in-out property <bool> numpad-open;
-    // "temp" sets a heater target, "settings" returns the value to Settings
+    // "temp" sets a heater target, "settings" returns the value to Settings,
+    // "extruder-mark" sets ExtruderMeasure.remaining
     in-out property <string> numpad-purpose;
     in-out property <string> numpad-unit;
     in-out property <string> numpad-title;
@@ -477,6 +505,17 @@ export global Overlay {
         numpad-open = true;
     }
 
+    // Print speed ("speed", M220) or flow ("flow", M221) in percent
+    public function edit-factor(purpose: string, title: string, current: int) {
+        numpad-title = title;
+        numpad-purpose = purpose;
+        numpad-unit = "%";
+        numpad-id = "";
+        numpad-hint = current + "";
+        numpad-value = "";
+        numpad-open = true;
+    }
+
     public function ask-number(id: string, title: string, current: float, unit: string) {
         numpad-title = title;
         numpad-purpose = "settings";
@@ -519,6 +558,16 @@ export global Overlay {
     public function ask-mesh-profile() {
         ask-text("", @tr("Name of the new mesh profile"), "");
         text-purpose = "mesh-profile";
+    }
+
+    public function ask-extruder-mark() {
+        numpad-title = @tr("Filament left above the extruder");
+        numpad-purpose = "extruder-mark";
+        numpad-unit = " mm";
+        numpad-id = "";
+        numpad-hint = ExtruderMeasure.remaining + "";
+        numpad-value = "";
+        numpad-open = true;
     }
 
     public function open-file(path: string) {

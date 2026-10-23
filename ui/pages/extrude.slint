@@ -1,6 +1,6 @@
 import { Theme } from "../theme.slint";
 import { Printer, Actions, Overlay, Fan, Strings } from "../state.slint";
-import { Btn, BtnKind, Card, Caption, Segmented, Bar } from "../widgets.slint";
+import { Btn, BtnKind, Card, Caption, Segmented, Bar, FanSpeeds } from "../widgets.slint";
 
 component FanRow inherits VerticalLayout {
     in property <Fan> fan;
@@ -9,16 +9,7 @@ component FanRow inherits VerticalLayout {
         Text { text: Strings.fan-name(root.fan); color: Theme.text; overflow: elide; horizontal-stretch: 1; }
         Text { text: round(root.fan.speed * 100) + "%"; color: Theme.text; font-weight: 700; horizontal-stretch: 0; }
     }
-    if root.fan.settable: HorizontalLayout {
-        spacing: 4px;
-        for v in [0, 25, 50, 75, 100]: Btn {
-            text: v + "";
-            font-size: Theme.font-s;
-            min-height: 40px;
-            active: round(root.fan.speed * 100) == v;
-            clicked => { Actions.set-fan(root.fan.id, v / 100); }
-        }
-    }
+    if root.fan.settable: FanSpeeds { fan-id: root.fan.id; speed: root.fan.speed; }
     if !root.fan.settable: Bar { value: root.fan.speed; }
 }
 
@@ -76,6 +67,26 @@ export component ExtrudePage inherits Rectangle {
                         icon: @image-url("../icons/down.svg");
                         enabled: !root.cold && !Printer.printing;
                         clicked => { Actions.extrude(root.lengths[root.length-index], root.speeds[root.speed-index]); }
+                    }
+                }
+
+                if Printer.load-macro != "" || Printer.unload-macro != "": VerticalLayout {
+                    spacing: 6px;
+                    Caption { text: @tr("Filament change"); }
+                    HorizontalLayout {
+                        spacing: Theme.gap;
+                        if Printer.unload-macro != "": Btn {
+                            text: @tr("Unload filament");
+                            icon: @image-url("../icons/up.svg");
+                            enabled: !Printer.printing;
+                            clicked => { Overlay.ask(@tr("Run macro {}?", Printer.unload-macro), "gcode", Printer.unload-macro); }
+                        }
+                        if Printer.load-macro != "": Btn {
+                            text: @tr("Load filament");
+                            icon: @image-url("../icons/down.svg");
+                            enabled: !Printer.printing;
+                            clicked => { Overlay.ask(@tr("Run macro {}?", Printer.load-macro), "gcode", Printer.load-macro); }
+                        }
                     }
                 }
             }

@@ -1,11 +1,12 @@
 //! Fake Moonraker for working on the UI without a printer.
 //! Run: `cargo run --example mock_moonraker`, then
 //! `MOONRAKER_URL=ws://127.0.0.1:7125/websocket cargo run`.
-//! Simulates heating, a print in progress, G-code responses and file thumbnails
+//! Simulates heating, a print in progress, G-code responses, file thumbnails and printer.cfg
 //! (served over HTTP on the same port, like the real Moonraker).
 
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
+use std::sync::{LazyLock, Mutex};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -18,6 +19,24 @@ const FILES: &[(&str, f64, u64, bool)] = &[
     ("old_file_without_thumbnail.gcode", 1750000000.0, 150_000, false),
 ];
 use tokio_tungstenite::{accept_async, tungstenite::Message};
+
+/// printer.cfg, read and replaced over HTTP (extruder calibration saves rotation_distance in it)
+static PRINTER_CFG: LazyLock<Mutex<String>> = LazyLock::new(|| {
+    Mutex::new(
+        "[include mainsail.cfg]\n\n[extruder]\nstep_pin: PB3\ndir_pin: !PB4\nrotation_distance: 22.6789  # BMG gears\n\
+         gear_ratio: 50:17\nnozzle_diameter: 0.400\n\n[heater_bed]\nheater_pin: PA1\n"
+            .into(),
+    )
+});
+
+/// rotation_distance in [extruder] of the mock printer.cfg, as Klipper would read it at startup
+fn cfg_rotation_distance() -> Option<f64> {
+    let cfg = PRINTER_CFG.lock().unwrap();
+    let section = cfg.split("[extruder]").nth(1)?;
+    let section = section.split("\n[").next()?;
+    let line = section.lines().find(|l| l.starts_with("rotation_distance"))?;
+    line.split_once(':')?.1.split('#').next()?.trim().parse().ok()
+}
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
@@ -166,6 +185,9 @@ impl Sim {
 async fn client(stream: TcpStream) -> anyhow::Result<()> {
     let mut head = [0u8; 32];
     let n = stream.peek(&mut head).await?;
+    if head[..n].starts_with(b"GET /server/files/config/") || head[..n].starts_with(b"POST /server/files/upload") {
+        return serve_config(stream).await;
+    }
     if head[..n].starts_with(b"GET /server/files/") {
         return serve_thumb(stream).await;
     }
@@ -232,6 +254,9 @@ async fn client(stream: TcpStream) -> anyhow::Result<()> {
                         "gcode_macro PARK", "gcode_macro M600",
                     ]}),
                     "printer.objects.subscribe" => json!({ "status": sim.status(), "eventtime": sim.t }),
+                    "printer.objects.query" => json!({ "eventtime": sim.t, "status": { "configfile": { "settings": {
+                        "extruder": { "rotation_distance": cfg_rotation_distance(), "min_extrude_temp": 170.0 },
+                    }}}}),
                     "server.gcode_store" => json!({ "gcode_store": [
                         { "message": "G28", "time": 0.0, "type": "command" },
                         { "message": "// Homing complete", "time": 0.0, "type": "response" },
@@ -362,6 +387,63 @@ fn metadata(filename: &str) -> Value {
     })
 }
 
+/// GET /server/files/config/printer.cfg and POST /server/files/upload (multipart, root=config).
+async fn serve_config(mut stream: TcpStream) -> anyhow::Result<()> {
+    let mut request = Vec::new();
+    let mut buf = [0u8; 4096];
+    let header_end = loop {
+        if let Some(i) = request.windows(4).position(|w| w == b"\r\n\r\n") {
+            break i + 4;
+        }
+        let n = stream.read(&mut buf).await?;
+        if n == 0 {
+            anyhow::bail!("request ended in the headers");
+        }
+        request.extend_from_slice(&buf[..n]);
+    };
+    let head = String::from_utf8_lossy(&request[..header_end]).to_string();
+    let length: usize = head
+        .lines()
+        .find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().to_string()))
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0);
+    while request.len() < header_end + length {
+        let n = stream.read(&mut buf).await?;
+        if n == 0 {
+            break;
+        }
+        request.extend_from_slice(&buf[..n]);
+    }
+    let path = head.split_whitespace().nth(1).unwrap_or("");
+    println!("HTTP {path}");
+
+    let (status, body) = if head.starts_with("POST") {
+        // The file part: after its headers, up to the closing boundary
+        let body = String::from_utf8_lossy(&request[header_end..]).to_string();
+        let file = body
+            .find("filename=\"")
+            .and_then(|i| body[i..].find("\r\n\r\n").map(|j| i + j + 4))
+            .and_then(|start| body.rfind("\r\n--").map(|end| body[start..end].to_string()));
+        match file {
+            Some(text) => {
+                println!("printer.cfg saved:\n{text}");
+                *PRINTER_CFG.lock().unwrap() = text;
+                ("201 Created", json!({ "result": { "action": "create_file" } }).to_string())
+            }
+            None => ("400 Bad Request", "no file".to_string()),
+        }
+    } else if path.ends_with("/printer.cfg") {
+        ("200 OK", PRINTER_CFG.lock().unwrap().clone())
+    } else {
+        ("404 Not Found", String::new())
+    };
+    let head = format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+    stream.write_all(head.as_bytes()).await?;
+    stream.write_all(body.as_bytes()).await?;
+    stream.shutdown().await?;
+    Ok(())
+}
+
 /// GET /server/files/gcodes/.../.thumbs/<name>-<W>x<H>.png
 async fn serve_thumb(mut stream: TcpStream) -> anyhow::Result<()> {
     let mut request = Vec::new();
@@ -391,27 +473,54 @@ async fn serve_thumb(mut stream: TcpStream) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Fake print render: a coloured ball on a base, transparent background like slicers produce.
+/// Fake print render: a coloured ball on a base with layer lines, antialiased, on a transparent
+/// background like slicers produce.
 fn render_thumb(stem: &str, size: u32) -> anyhow::Result<Vec<u8>> {
     let hash = stem.bytes().fold(7u32, |h, b| h.wrapping_mul(31).wrapping_add(b as u32));
     let hue = (hash % 360) as f32;
-    let color = |light: f32| hsl(hue, 0.7, light);
+    // Colour (lightness) and coverage of one point of the picture, None outside the model
+    let sample = |u: f32, v: f32| -> Option<f32> {
+        let (dx, dy) = (u - 0.5, v - 0.45);
+        let r = 0.3;
+        // Layer lines: a slightly darker band every 1/70 of the height
+        let layer = if (v * 70.0).fract() < 0.18 { 0.06 } else { 0.0 };
+        if dx * dx + dy * dy < r * r {
+            // Lambert shading from the top left, plus a highlight
+            let nz = (1.0 - (dx * dx + dy * dy) / (r * r)).sqrt();
+            let (nx, ny) = (dx / r, dy / r);
+            let diffuse = (-0.5 * nx - 0.6 * ny + 0.62 * nz).max(0.0);
+            let spec = diffuse.powi(24) * 0.35;
+            Some(0.16 + diffuse * 0.42 + spec - layer)
+        } else if (0.76..0.88).contains(&v) && (0.12..0.88).contains(&u) {
+            // Base: lit top edge, darker front
+            Some(if v < 0.785 { 0.5 } else { 0.3 } - layer)
+        } else {
+            None
+        }
+    };
 
+    const AA: u32 = 4;
     let mut pixels = Vec::with_capacity((size * size * 4) as usize);
     for y in 0..size {
         for x in 0..size {
-            let (u, v) = ((x as f32 + 0.5) / size as f32, (y as f32 + 0.5) / size as f32);
-            let (dx, dy) = (u - 0.5, v - 0.47);
-            let px = if dx * dx + dy * dy < 0.31 * 0.31 {
-                // Light from the top left
-                let shade = 0.65 - ((u - 0.38).powi(2) + (v - 0.33).powi(2)).sqrt() * 0.8;
-                color(shade.clamp(0.2, 0.75))
-            } else if (0.78..0.9).contains(&v) && (0.14..0.86).contains(&u) {
-                color(0.28)
+            let (mut light, mut hits) = (0.0, 0);
+            for sy in 0..AA {
+                for sx in 0..AA {
+                    let u = (x as f32 + (sx as f32 + 0.5) / AA as f32) / size as f32;
+                    let v = (y as f32 + (sy as f32 + 0.5) / AA as f32) / size as f32;
+                    if let Some(l) = sample(u, v) {
+                        light += l;
+                        hits += 1;
+                    }
+                }
+            }
+            if hits == 0 {
+                pixels.extend_from_slice(&[0, 0, 0, 0]);
             } else {
-                [0, 0, 0, 0]
-            };
-            pixels.extend_from_slice(&px);
+                let mut px = hsl(hue, 0.55, (light / hits as f32).clamp(0.05, 0.9));
+                px[3] = (255 * hits / (AA * AA)) as u8;
+                pixels.extend_from_slice(&px);
+            }
         }
     }
 

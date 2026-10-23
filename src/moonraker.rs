@@ -2,8 +2,8 @@
 
 use crate::config::Config;
 use crate::printer::{self, Objects, PrinterModel};
-use crate::thumbs::{Size, Thumbs};
-use crate::{AppWindow, Conn, ConsoleLine, Status, bridge, updates};
+use crate::thumbs::{self, Size, Thumbs};
+use crate::{AppWindow, Conn, ConsoleLine, Status, bridge, printer_cfg, updates};
 use anyhow::bail;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
@@ -38,6 +38,12 @@ pub enum Command {
     LevelBed(String),
     /// PID tuning: heater object, target temperature
     CalibratePid(String, f32),
+    /// Extruder calibration: slow extrusion of this many mm, to be measured
+    MeasureExtrude(f32),
+    /// New rotation distance of the extruder, until Klipper restarts
+    SetRotationDistance(f32),
+    /// Writes the rotation distance in use into printer.cfg
+    SaveRotationDistance,
     Pause,
     Resume,
     Cancel,
@@ -64,6 +70,10 @@ enum Pending {
     Gcode,
     /// PID_CALIBRATE: the answer comes when the tuning ends
     Pid,
+    /// SET_EXTRUDER_ROTATION_DISTANCE: the value in use before it, restored if it fails
+    RotationDistance(Option<f64>),
+    /// Values from the printer config (configfile settings)
+    ConfigSettings,
     PrinterInfo,
     ObjectsList,
     Subscribe,
@@ -278,11 +288,13 @@ impl<'a> Session<'a> {
             }
             "notify_klippy_ready" => {
                 self.model.subscribed = false;
+                self.model.klipper_restarted();
                 self.call("printer.info", json!({}), Pending::PrinterInfo).await?;
             }
             "notify_klippy_shutdown" | "notify_klippy_disconnected" => {
                 self.model.subscribed = false;
                 self.discovering = false;
+                self.model.klipper_restarted();
                 self.model.klippy_state =
                     if method == "notify_klippy_shutdown" { "shutdown" } else { "disconnected" }.into();
                 self.push_state();
@@ -308,7 +320,7 @@ impl<'a> Session<'a> {
 
     async fn on_result(&mut self, pending: Pending, result: &Value) -> anyhow::Result<()> {
         match pending {
-            Pending::Ignore | Pending::Action | Pending::Gcode => {}
+            Pending::Ignore | Pending::Action | Pending::Gcode | Pending::RotationDistance(_) => {}
             Pending::Pid => {
                 self.model.pid_heater.clear();
                 self.push_state();
@@ -337,6 +349,13 @@ impl<'a> Session<'a> {
                 self.discovering = false;
                 self.push_state();
                 self.request_job_meta().await?;
+                // Not subscribed: the whole config is large and does not change until a restart
+                let params = json!({ "objects": { "configfile": ["settings"] } });
+                self.call("printer.objects.query", params, Pending::ConfigSettings).await?;
+            }
+            Pending::ConfigSettings => {
+                self.model.apply_settings(&result["status"]["configfile"]["settings"]);
+                self.push_state();
             }
             Pending::GcodeStore => {
                 let lines = result
@@ -411,12 +430,18 @@ impl<'a> Session<'a> {
                 bridge::console(&self.ui, vec![ConsoleLine { text: format!("!! {msg}").into(), kind: 2 }]);
                 bridge::toast(&self.ui, msg);
             }
+            Pending::RotationDistance(previous) => {
+                self.model.live_rotation_distance = previous;
+                self.push_state();
+                bridge::console(&self.ui, vec![ConsoleLine { text: format!("!! {msg}").into(), kind: 2 }]);
+                bridge::toast(&self.ui, msg);
+            }
             Pending::FileMeta(path) => {
                 bridge::details(&self.ui, printer::file_details(&path, &Value::Null));
             }
             Pending::JobMeta(path) => self.model.job_meta = Some((path, Value::Null)),
             Pending::ListMeta(_) => {}
-            Pending::Ignore | Pending::GcodeStore | Pending::FileList => {
+            Pending::Ignore | Pending::GcodeStore | Pending::FileList | Pending::ConfigSettings => {
                 eprintln!("Moonraker: {msg}");
             }
             Pending::Action => bridge::toast(&self.ui, msg),
@@ -465,6 +490,47 @@ impl<'a> Session<'a> {
                 self.model.pid_heater = heater;
                 self.push_state();
                 return self.call("printer.gcode.script", json!({ "script": g }), Pending::Pid).await;
+            }
+            Command::MeasureExtrude(mm) => return self.gcode(printer::measure_extrude_gcode(mm)).await,
+            Command::SetRotationDistance(distance) => {
+                // f32 from the UI; rounded as sent, so it compares equal to the saved value
+                let distance = (f64::from(distance) * 1000.0).round() / 1000.0;
+                let Some(g) = self.model.rotation_distance_gcode(distance) else { return Ok(()) };
+                let previous = self.model.live_rotation_distance.replace(distance);
+                self.model.rotation_save.clear();
+                self.push_state();
+                return self.call("printer.gcode.script", json!({ "script": g }), Pending::RotationDistance(previous)).await;
+            }
+            Command::SaveRotationDistance => {
+                let Some(distance) = self.model.live_rotation_distance else { return Ok(()) };
+                self.model.rotation_save = "saving".into();
+                self.push_state();
+                // Rarely used and quick on the local network, so the session waits for it
+                let base = thumbs::http_base(&self.cfg.moonraker_url);
+                let value = format!("{distance:.3}");
+                let result = tokio::task::spawn_blocking(move || {
+                    printer_cfg::save_option(&base, "extruder", "rotation_distance", &value)
+                })
+                .await;
+                self.model.rotation_save_error.clear();
+                self.model.rotation_save = match result {
+                    Ok(Ok(true)) => {
+                        self.model.rotation_distance = Some(distance);
+                        "saved"
+                    }
+                    Ok(Ok(false)) => "not-found",
+                    Ok(Err(e)) => {
+                        self.model.rotation_save_error = format!("{e:#}");
+                        "error"
+                    }
+                    Err(e) => {
+                        self.model.rotation_save_error = e.to_string();
+                        "error"
+                    }
+                }
+                .into();
+                self.push_state();
+                return Ok(());
             }
             Command::LevelBed(method) => {
                 return match self.model.level_bed_gcode(&method) {

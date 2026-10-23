@@ -1,9 +1,116 @@
 import { Theme } from "../theme.slint";
 import { Printer, Actions, Overlay, Nav, Strings, Status } from "../state.slint";
-import { Btn, BtnKind, Caption, Bar, Thumb } from "../widgets.slint";
+import { Btn, BtnKind } from "../widgets.slint";
 
-// Concept C: one glance from across the room. The remaining time dominates;
-// everything else is one tap away (chips, Tune, Menu).
+// Temperature or fan tile beside the thumbnail: icon, current value and target, with a
+// thin bar of how far the heater has got to its target. Taps open Tune.
+component StatTile inherits Rectangle {
+    in property <image> icon;
+    in property <color> tint;
+    in property <string> label;
+    in property <string> value;
+    in property <string> target;
+    // 0..1 along the bottom edge, -1 for none
+    in property <float> level: -1;
+    // Heating: the icon breathes
+    in property <bool> pulse;
+    callback clicked();
+
+    height: 72px;
+    border-radius: Theme.radius;
+    clip: true;
+    background: ta.pressed ? Theme.border : Theme.surface;
+    accessible-role: button;
+    accessible-label: root.label + " " + root.value + " " + root.target;
+    accessible-action-default => { root.clicked(); }
+
+    // Accent strip on the left in the tile's colour
+    Rectangle { x: 0; width: 4px; height: parent.height; background: root.tint; }
+
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 10px;
+        spacing: 10px;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 38px;
+                height: 38px;
+                border-radius: 19px;
+                background: root.tint.transparentize(0.82);
+                Image {
+                    source: root.icon;
+                    colorize: root.tint;
+                    width: 24px;
+                    height: 24px;
+                    // animation-tick() is only read while heating, so idle tiles do not redraw
+                    opacity: root.pulse ? 0.55 + 0.45 * abs(sin(animation-tick() / 1100ms * 180deg)) : 1;
+                }
+            }
+        }
+        // The icon says what it is; the name is only for screen readers
+        HorizontalLayout {
+            alignment: start;
+            spacing: 6px;
+            Text {
+                text: root.value;
+                color: Theme.text;
+                font-family: Theme.display;
+                font-size: Theme.font-xl;
+                font-weight: 700;
+                vertical-alignment: center;
+            }
+            Text {
+                text: root.target;
+                color: Theme.text-dim;
+                font-size: Theme.font-m;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+        }
+    }
+
+    if root.level >= 0: Rectangle {
+        x: 0;
+        y: parent.height - 3px;
+        width: parent.width * clamp(root.level, 0, 1);
+        height: 3px;
+        background: @linear-gradient(90deg, root.tint.transparentize(0.6) 0%, root.tint 100%);
+        animate width { duration: 400ms; easing: ease-out; }
+    }
+
+    ta := TouchArea { clicked => { root.clicked(); } }
+}
+
+// Full-width print progress: a gradient fill with a sheen running along it while printing.
+component ProgressBar inherits Rectangle {
+    in property <float> value;
+    in property <bool> paused;
+
+    height: 14px;
+    border-radius: self.height / 2;
+    background: Theme.surface-2;
+
+    Rectangle {
+        x: 0;
+        width: max(parent.height, parent.width * clamp(root.value, 0, 1));
+        height: parent.height;
+        border-radius: parent.border-radius;
+        clip: true;
+        background: root.paused ? Theme.warn : @linear-gradient(90deg, Theme.accent.darker(0.45) 0%, Theme.accent 100%);
+        animate width { duration: 600ms; easing: ease-out; }
+
+        if !root.paused: Rectangle {
+            property <float> phase: mod(animation-tick(), 2400ms) / 2400ms;
+            width: 90px;
+            x: -self.width + (parent.width + self.width) * self.phase;
+            background: @linear-gradient(90deg, #ffffff00 0%, #ffffff50 50%, #ffffff00 100%);
+        }
+    }
+}
+
+// Concept C: one glance from across the room. The remaining time dominates; the thumbnail,
+// temperatures and fan sit beside it, the progress bar spans the screen. Tiles open Tune.
 export component DashboardPage inherits Rectangle {
     property <bool> active: Printer.printing;
     property <bool> finished: !Printer.printing && Printer.job.filename != "";
@@ -21,147 +128,170 @@ export component DashboardPage inherits Rectangle {
         padding-left: 10px;
         padding-right: 10px;
         padding-bottom: 16px;
-        spacing: 14px;
+        spacing: 12px;
+
+        // Equal spacers above and below keep the job block in the middle of the free space
+        Rectangle { vertical-stretch: 1; }
 
         HorizontalLayout {
-            spacing: 28px;
-            vertical-stretch: 1;
+            spacing: 18px;
 
-            VerticalLayout {
-                width: 270px;
-                spacing: 10px;
-                if Printer.job-thumb.width > 0: Thumb {
+            Rectangle {
+                width: 232px;
+                height: 232px;
+                border-radius: Theme.radius-l;
+                background: Theme.surface;
+                clip: true;
+                if Printer.job-thumb.width > 0: Image {
                     source: Printer.job-thumb;
-                    height: 230px;
-                    border-radius: Theme.radius-l;
+                    width: parent.width - 24px;
+                    height: parent.height - 24px;
+                    image-fit: contain;
                 }
-                if Printer.job-thumb.width == 0: Rectangle {
-                    height: 230px;
-                    border-radius: Theme.radius-l;
-                    background: Theme.surface;
-                    Image {
-                        source: @image-url("../icons/files.svg");
-                        colorize: Theme.border;
-                        width: 64px;
-                        height: 64px;
-                    }
+                if Printer.job-thumb.width == 0: Image {
+                    source: @image-url("../icons/files.svg");
+                    colorize: Theme.border;
+                    width: 56px;
+                    height: 56px;
                 }
-                Text {
-                    text: root.active || root.finished ? Printer.job.filename : Printer.hostname;
-                    color: Theme.text-dim;
-                    font-size: Theme.font-s;
-                    overflow: elide;
-                }
-                Rectangle { vertical-stretch: 1; }
             }
 
             VerticalLayout {
-                spacing: 6px;
+                spacing: 2px;
                 horizontal-stretch: 1;
+                alignment: center;
 
-                // Printing or paused: remaining time, end time, progress
+                Text {
+                    text: root.active || root.finished ? Printer.job.filename : Printer.hostname;
+                    color: Theme.text;
+                    font-size: Theme.font-m;
+                    overflow: elide;
+                }
+
+                // Printing or paused: remaining time and end time
                 if root.active: VerticalLayout {
-                    spacing: 6px;
                     Text {
                         text: Printer.job.state == "paused" ? @tr("Paused, remaining") : @tr("Remaining");
                         color: Printer.job.state == "paused" ? Theme.warn : Theme.text-dim;
-                        font-size: 15px;
+                        font-size: Theme.font-s;
                     }
                     HorizontalLayout {
                         alignment: start;
-                        spacing: 10px;
+                        spacing: 8px;
                         Text {
                             text: root.minutes < 0 ? "-" : root.big-time(root.minutes);
                             color: Theme.text;
                             font-family: Theme.display;
                             font-weight: 700;
-                            font-size: 96px;
+                            font-size: 84px;
                             vertical-alignment: bottom;
                         }
                         Text {
                             text: root.minutes >= 60 ? "h" : "min";
-                            color: Theme.text-dim;
+                            color: Theme.accent;
                             font-family: Theme.display;
                             font-weight: 600;
-                            font-size: 44px;
+                            font-size: 36px;
                             vertical-alignment: bottom;
                         }
                     }
                     if Printer.job.eta-clock != "": Text {
                         text: @tr("finishes around {}", Printer.job.eta-clock);
-                        color: Theme.text;
-                        font-size: Theme.font-m;
-                    }
-                    Rectangle { height: 6px; }
-                    Bar {
-                        height: 10px;
-                        value: Printer.job.progress;
-                        fill: Printer.job.state == "paused" ? Theme.warn : Theme.accent;
-                    }
-                    Text {
-                        text: @tr("{}% · layer {} · Z {}", round(Printer.job.progress * 100), Printer.job.layer, Printer.position.z);
                         color: Theme.text-dim;
-                        font-size: Theme.font-s;
+                        font-size: Theme.font-m;
                     }
                 }
 
                 // Finished, cancelled or failed: outcome and print time
                 if root.finished: VerticalLayout {
-                    spacing: 6px;
                     Text {
                         text: Strings.status(Printer.status);
                         color: Printer.job.state == "complete" ? Theme.accent : Theme.danger-text;
-                        font-size: 15px;
+                        font-size: Theme.font-s;
                     }
                     Text {
                         text: Printer.job.elapsed;
                         color: Theme.text;
                         font-family: Theme.display;
                         font-weight: 700;
-                        font-size: 72px;
+                        font-size: 64px;
                     }
                     Text {
                         text: @tr("print time · filament {}", Printer.job.filament);
                         color: Theme.text-dim;
-                        font-size: Theme.font-m;
+                        font-size: Theme.font-s;
+                        wrap: word-wrap;
                     }
                 }
 
                 // Idle
                 if !root.active && !root.finished: VerticalLayout {
-                    spacing: 6px;
-                    Text { text: @tr("State"); color: Theme.text-dim; font-size: 15px; }
+                    Text { text: @tr("State"); color: Theme.text-dim; font-size: Theme.font-s; }
                     Text {
                         text: Strings.status(Printer.status);
                         color: Theme.text;
                         font-family: Theme.display;
                         font-weight: 700;
-                        font-size: 72px;
+                        font-size: 56px;
                         overflow: elide;
                     }
                 }
+            }
 
-                Rectangle { vertical-stretch: 1; }
-
-                // Temperatures and fan, one tap from their controls
-                HorizontalLayout {
-                    alignment: start;
-                    spacing: 8px;
-                    for h in Printer.top-heaters: Btn {
-                        text: Strings.heater-name(h) + " " + round(h.temp) + "/" + round(h.target) + "°";
-                        font-size: Theme.font-s;
-                        min-height: 44px;
-                        clicked => { Overlay.edit-temp(h); }
-                    }
-                    if Printer.has-part-fan: Btn {
-                        text: @tr("Fan {}%", round(Printer.part-fan * 100));
-                        font-size: Theme.font-s;
-                        min-height: 44px;
-                        clicked => { Overlay.tune-open = true; }
-                    }
+            // Temperatures and fan, all adjusted in the Tune sheet
+            VerticalLayout {
+                width: 220px;
+                spacing: 8px;
+                alignment: center;
+                for h in Printer.top-heaters: StatTile {
+                    icon: h.role == "bed" ? @image-url("../icons/bed.svg") : @image-url("../icons/nozzle.svg");
+                    tint: h.target > 0 ? Theme.hot : Theme.text-dim;
+                    label: Strings.heater-name(h);
+                    value: round(h.temp) + "°";
+                    target: h.target > 0 ? "/ " + round(h.target) + "°" : "";
+                    level: h.target > 0 ? h.temp / h.target : -1;
+                    pulse: h.target > 0 && h.temp < h.target - 2;
+                    clicked => { Overlay.tune-open = true; }
+                }
+                if Printer.has-part-fan: StatTile {
+                    icon: @image-url("../icons/fan.svg");
+                    tint: Printer.part-fan > 0 ? Theme.accent : Theme.text-dim;
+                    label: @tr("Part cooling");
+                    value: round(Printer.part-fan * 100) + "%";
+                    level: Printer.part-fan > 0 ? Printer.part-fan : -1;
+                    clicked => { Overlay.tune-open = true; }
                 }
             }
         }
+
+        // Progress across the whole width
+        if root.active: VerticalLayout {
+            spacing: 6px;
+            vertical-stretch: 0;
+            ProgressBar {
+                value: Printer.job.progress;
+                paused: Printer.job.state == "paused";
+            }
+            HorizontalLayout {
+                Text {
+                    text: round(Printer.job.progress * 100) + "%";
+                    color: Printer.job.state == "paused" ? Theme.warn : Theme.accent;
+                    font-family: Theme.display;
+                    font-size: Theme.font-l;
+                    font-weight: 700;
+                    vertical-alignment: bottom;
+                }
+                Text {
+                    text: @tr("layer {} · Z {}", Printer.job.layer, Printer.position.z);
+                    color: Theme.text-dim;
+                    font-size: Theme.font-s;
+                    horizontal-alignment: right;
+                    vertical-alignment: bottom;
+                }
+            }
+        }
+
+        Rectangle { vertical-stretch: 1; }
 
         HorizontalLayout {
             height: 60px;

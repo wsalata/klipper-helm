@@ -2,7 +2,7 @@
 //! into the structures shown by the UI. Only codes and raw data go to the UI;
 //! translated labels are produced in Slint.
 
-use crate::{BedLevel, BedMeshInfo, Conn, Fan, FileDetails, Heater, MeshCell, MeshProfile, PrintJob, Position, ScrewAdjust, Status, ZCalibration};
+use crate::{BedLevel, BedMeshInfo, Conn, ExtruderCalibration, Fan, FileDetails, Heater, MeshCell, MeshProfile, PrintJob, Position, ScrewAdjust, Status, ZCalibration};
 use serde_json::{Value, json};
 
 /// Klipper objects discovered via `printer.objects.list`.
@@ -143,6 +143,19 @@ pub fn set_temp_gcode(obj: &str, target: f32) -> String {
     }
 }
 
+/// Slow extrusion for measuring the extruder: 1 mm/s, in moves of at most 10 mm, because
+/// Klipper refuses longer extrude-only moves (max_extrude_only_distance, 50 mm by default).
+pub fn measure_extrude_gcode(mm: f32) -> String {
+    let mut script = String::from("M83");
+    let mut left = mm.clamp(0.0, 200.0);
+    while left > 0.0 {
+        let step = left.min(10.0);
+        script.push_str(&format!("\nG1 E{step} F60"));
+        left -= step;
+    }
+    script
+}
+
 pub fn set_fan_gcode(obj: &str, speed: f32) -> Option<String> {
     let speed = speed.clamp(0.0, 1.0);
     match obj.split_once(' ') {
@@ -210,6 +223,7 @@ pub struct Snapshot {
     /// Heaters PID_CALIBRATE works with (not temperature fans)
     pub pid_heaters: Vec<Heater>,
     pub pid_heater: String,
+    pub extruder_cal: ExtruderCalibration,
 }
 
 #[derive(Default)]
@@ -223,6 +237,14 @@ pub struct PrinterModel {
     pub job_meta: Option<(String, Value)>,
     /// Heater whose PID_CALIBRATE is running ("" when none): Klipper answers when it ends
     pub pid_heater: String,
+    /// `[extruder]` rotation_distance and min_extrude_temp from the config (queried once Klipper is ready)
+    pub rotation_distance: Option<f64>,
+    pub min_extrude_temp: Option<f64>,
+    /// Set with SET_EXTRUDER_ROTATION_DISTANCE; Klipper forgets it when it restarts
+    pub live_rotation_distance: Option<f64>,
+    /// Writing rotation_distance into printer.cfg: "", "saving", "saved", "not-found" or "error"
+    pub rotation_save: String,
+    pub rotation_save_error: String,
 }
 
 impl PrinterModel {
@@ -496,6 +518,43 @@ impl PrinterModel {
         Some(format!("PID_CALIBRATE HEATER={name} TARGET={}", target.round()))
     }
 
+    /// Values from the `settings` field of Klipper's configfile object.
+    pub fn apply_settings(&mut self, settings: &Value) {
+        let num = |path: &str| settings.pointer(path).and_then(Value::as_f64);
+        self.rotation_distance = num("/extruder/rotation_distance");
+        self.min_extrude_temp = num("/extruder/min_extrude_temp");
+    }
+
+    /// Klipper restarted: values set with commands are gone, the config is read again.
+    pub fn klipper_restarted(&mut self) {
+        self.live_rotation_distance = None;
+        self.rotation_save.clear();
+        self.rotation_save_error.clear();
+    }
+
+    fn extruder_cal(&self) -> ExtruderCalibration {
+        let configured = self.rotation_distance.unwrap_or(0.0);
+        ExtruderCalibration {
+            available: self.objects.has("extruder") && self.rotation_distance.is_some(),
+            current: self.live_rotation_distance.unwrap_or(configured) as f32,
+            configured: configured as f32,
+            unsaved: self.live_rotation_distance.is_some_and(|v| v != configured),
+            // Klipper's default
+            min_temp: self.min_extrude_temp.unwrap_or(170.0) as f32,
+            save: self.rotation_save.as_str().into(),
+            save_error: self.rotation_save_error.as_str().into(),
+        }
+    }
+
+    /// New rotation distance for the main extruder, in effect until Klipper restarts.
+    /// A negative value would reverse the motor, so it is refused like nonsense values.
+    pub fn rotation_distance_gcode(&self, distance: f64) -> Option<String> {
+        if !self.objects.has("extruder") || !(distance > 0.0 && distance < 1000.0) {
+            return None;
+        }
+        Some(format!("SET_EXTRUDER_ROTATION_DISTANCE EXTRUDER=extruder DISTANCE={distance:.3}"))
+    }
+
     /// Probes a new bed mesh, homing first if needed. Klipper stores it as `profile`
     /// ("default" when empty) and waits for SAVE_CONFIG to keep it.
     pub fn bed_mesh_gcode(&self, profile: &str) -> String {
@@ -606,6 +665,7 @@ impl PrinterModel {
             screws: self.screws(),
             pid_heaters,
             pid_heater: self.pid_heater.clone(),
+            extruder_cal: self.extruder_cal(),
         }
     }
 }
@@ -800,6 +860,30 @@ mod tests {
         assert_eq!(m.pid_calibrate_gcode("heater_bed", 60.0), None);
         let ids: Vec<_> = m.snapshot().pid_heaters.iter().map(|h| h.id.to_string()).collect();
         assert_eq!(ids, ["extruder", "heater_generic chamber"]);
+    }
+
+    #[test]
+    fn extruder_calibration() {
+        assert_eq!(measure_extrude_gcode(25.0), "M83\nG1 E10 F60\nG1 E10 F60\nG1 E5 F60");
+        let mut m = PrinterModel::default();
+        assert!(!m.extruder_cal().available);
+        assert_eq!(m.rotation_distance_gcode(22.0), None);
+        m.objects = Objects::discover(&[json!("extruder")]);
+        m.apply_settings(&json!({ "extruder": { "rotation_distance": 22.6789, "min_extrude_temp": 180.0 } }));
+        let cal = m.extruder_cal();
+        assert!(cal.available && !cal.unsaved);
+        assert_eq!((cal.current, cal.min_temp), (22.6789, 180.0));
+        assert_eq!(
+            m.rotation_distance_gcode(23.12345).as_deref(),
+            Some("SET_EXTRUDER_ROTATION_DISTANCE EXTRUDER=extruder DISTANCE=23.123")
+        );
+        assert_eq!(m.rotation_distance_gcode(-22.0), None);
+        m.live_rotation_distance = Some(23.123);
+        let cal = m.extruder_cal();
+        assert!(cal.unsaved);
+        assert_eq!((cal.current, cal.configured), (23.123, 22.6789));
+        m.klipper_restarted();
+        assert!(!m.extruder_cal().unsaved);
     }
 
     #[test]

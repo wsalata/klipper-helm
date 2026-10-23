@@ -25,6 +25,8 @@ export component MovePage inherits Rectangle {
     property <[float]> steps: [0.1, 1, 10, 50];
     property <int> step-index: 2;
     property <float> step: root.steps[root.step-index];
+    // Moving the head would ruin a running print; while paused it is allowed (e.g. to clean the nozzle)
+    property <bool> can-move: Printer.job.state != "printing";
 
     HorizontalLayout {
         padding: Theme.gap;
@@ -50,27 +52,34 @@ export component MovePage inherits Rectangle {
                     spacing: Theme.gap;
                     horizontal-stretch: 3;
                     Row {
-                        Rectangle {}
-                        Btn { text: "Y+"; icon: @image-url("../icons/up.svg"); clicked => { Actions.jog("Y", root.step); } }
+                        Btn { text: "XYZ"; kind: BtnKind.accent; icon: @image-url("../icons/home.svg"); enabled: root.can-move; clicked => { Actions.gcode("G28"); } }
+                        Btn { text: "Y+"; icon: @image-url("../icons/up.svg"); enabled: root.can-move; clicked => { Actions.jog("Y", root.step); } }
                         Rectangle {}
                     }
                     Row {
-                        Btn { text: "X-"; icon: @image-url("../icons/left.svg"); clicked => { Actions.jog("X", -root.step); } }
-                        Btn { text: "XY"; icon: @image-url("../icons/home.svg"); clicked => { Actions.gcode("G28 X Y"); } }
-                        Btn { text: "X+"; icon: @image-url("../icons/right.svg"); clicked => { Actions.jog("X", root.step); } }
+                        Btn { text: "X-"; icon: @image-url("../icons/left.svg"); enabled: root.can-move; clicked => { Actions.jog("X", -root.step); } }
+                        Btn { text: "XY"; icon: @image-url("../icons/home.svg"); enabled: root.can-move; clicked => { Actions.gcode("G28 X Y"); } }
+                        Btn { text: "X+"; icon: @image-url("../icons/right.svg"); enabled: root.can-move; clicked => { Actions.jog("X", root.step); } }
                     }
                     Row {
-                        Rectangle {}
-                        Btn { text: "Y-"; icon: @image-url("../icons/down.svg"); clicked => { Actions.jog("Y", -root.step); } }
+                        Btn {
+                            icon: @image-url("../icons/motor-off.svg");
+                            icon-size: 30px;
+                            accessible-label: @tr("Motors off");
+                            kind: BtnKind.danger-outline;
+                            enabled: !Printer.printing;
+                            clicked => { Actions.gcode("M84"); }
+                        }
+                        Btn { text: "Y-"; icon: @image-url("../icons/down.svg"); enabled: root.can-move; clicked => { Actions.jog("Y", -root.step); } }
                         Rectangle {}
                     }
                 }
                 VerticalLayout {
                     spacing: Theme.gap;
                     horizontal-stretch: 1;
-                    Btn { text: "Z+"; icon: @image-url("../icons/up.svg"); clicked => { Actions.jog("Z", root.step); } }
-                    Btn { text: "Z"; icon: @image-url("../icons/home.svg"); clicked => { Actions.gcode("G28 Z"); } }
-                    Btn { text: "Z-"; icon: @image-url("../icons/down.svg"); clicked => { Actions.jog("Z", -root.step); } }
+                    Btn { text: "Z+"; icon: @image-url("../icons/up.svg"); enabled: root.can-move; clicked => { Actions.jog("Z", root.step); } }
+                    Btn { text: "Z"; icon: @image-url("../icons/home.svg"); enabled: root.can-move; clicked => { Actions.gcode("G28 Z"); } }
+                    Btn { text: "Z-"; icon: @image-url("../icons/down.svg"); enabled: root.can-move; clicked => { Actions.jog("Z", -root.step); } }
                 }
             }
 
@@ -80,29 +89,6 @@ export component MovePage inherits Rectangle {
                 Segmented {
                     items: ["0.1", "1", "10", "50"];
                     selected <=> root.step-index;
-                }
-            }
-        }
-
-        Card {
-            width: 180px;
-            VerticalLayout {
-                padding: Theme.gap;
-                spacing: Theme.gap;
-                Caption { text: @tr("Homing"); }
-                Btn { text: @tr("All"); kind: BtnKind.accent; icon: @image-url("../icons/home.svg"); clicked => { Actions.gcode("G28"); } }
-                HorizontalLayout {
-                    spacing: 6px;
-                    Btn { text: "X"; clicked => { Actions.gcode("G28 X"); } }
-                    Btn { text: "Y"; clicked => { Actions.gcode("G28 Y"); } }
-                    Btn { text: "Z"; clicked => { Actions.gcode("G28 Z"); } }
-                }
-                Rectangle { vertical-stretch: 1; }
-                Btn {
-                    text: @tr("Motors off");
-                    font-size: Theme.font-s;
-                    enabled: !Printer.printing;
-                    clicked => { Actions.gcode("M84"); }
                 }
             }
         }

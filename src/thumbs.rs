@@ -150,7 +150,7 @@ pub fn decode_png(bytes: &[u8]) -> anyhow::Result<Pixels> {
 }
 
 /// ws://host:7125/websocket → http://host:7125
-fn http_base(ws_url: &str) -> String {
+pub fn http_base(ws_url: &str) -> String {
     let url = if let Some(rest) = ws_url.strip_prefix("wss://") {
         format!("https://{rest}")
     } else if let Some(rest) = ws_url.strip_prefix("ws://") {

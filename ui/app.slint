@@ -25,6 +25,7 @@ import { BedMeshPage } from "pages/bedmesh.slint";
 import { CalibrationPage } from "pages/calibration.slint";
 import { BedLevelPage } from "pages/bedlevel.slint";
 import { PidPage } from "pages/pid.slint";
+import { ExtruderCalibratePage } from "pages/extrudercal.slint";
 import { ScreensaverView } from "screensaver.slint";
 
 export { Printer, Actions, Overlay, Nav, Settings, Messages, Network, Update, Screensaver }
@@ -46,6 +47,7 @@ component Header inherits HorizontalLayout {
         if (page == 13) { return @tr("Calibration"); }
         if (page == 14) { return @tr("Bed levelling"); }
         if (page == 15) { return @tr("Heater calibration"); }
+        if (page == 16) { return @tr("Extruder calibration"); }
         return "";
     }
 
@@ -135,9 +137,15 @@ component Header inherits HorizontalLayout {
 
 export component AppWindow inherits Window {
     title: "Klipper Helm";
-    preferred-width: 800px;
-    preferred-height: 480px;
-    background: Theme.bg;
+    // Desktop preview of the printer's screen (KLIPPER_HELM_SCREEN): the panel is drawn at this
+    // logical size in the middle of the window, whatever size the window manager gives it;
+    // 0 fills the window
+    in property <length> fixed-width: 0px;
+    in property <length> fixed-height: 0px;
+    property <bool> framed: root.fixed-width > 0 && root.fixed-height > 0;
+    preferred-width: root.framed ? root.fixed-width : 800px;
+    preferred-height: root.framed ? root.fixed-height : 480px;
+    background: root.framed ? #000000 : Theme.bg;
     default-font-family: Theme.font;
     default-font-size: Theme.font-m;
 
@@ -153,68 +161,76 @@ export component AppWindow inherits Window {
         }
     }
 
-    VerticalLayout {
-        Header {}
-        // Pages add their own 10 px, so content lines up with the 20 px header
-        HorizontalLayout {
-          padding-left: 10px;
-          padding-right: 10px;
-          vertical-stretch: 1;
-          Rectangle {
-            if root.blocked: NotReadyPanel { width: 100%; height: 100%; }
-            if !root.blocked && Nav.page == 0: DashboardPage { width: 100%; height: 100%; }
-            if !root.blocked && Nav.page == 1: TemperaturePage { width: 100%; height: 100%; }
-            if !root.blocked && Nav.page == 2: MovePage { width: 100%; height: 100%; }
-            if !root.blocked && Nav.page == 3: ExtrudePage { width: 100%; height: 100%; }
-            if !root.blocked && Nav.page == 4: FilesPage { width: 100%; height: 100%; }
-            if !root.blocked && Nav.page == 5: MacrosPage { width: 100%; height: 100%; }
-            if Nav.page == 6: ConsolePage { width: 100%; height: 100%; }
-            if Nav.page == 7: SystemPage { width: 100%; height: 100%; }
-            if Nav.page == 8: SettingsPage { width: 100%; height: 100%; }
-            if Nav.page == 9: NetworkPage { width: 100%; height: 100%; }
-            if Nav.page == 10: UpdatePage { width: 100%; height: 100%; }
-            if !root.blocked && Nav.page == 11: ZCalibratePage { width: 100%; height: 100%; }
-            if !root.blocked && Nav.page == 12: BedMeshPage { width: 100%; height: 100%; }
-            if !root.blocked && Nav.page == 13: CalibrationPage { width: 100%; height: 100%; }
-            if !root.blocked && Nav.page == 14: BedLevelPage { width: 100%; height: 100%; }
-            if !root.blocked && Nav.page == 15: PidPage { width: 100%; height: 100%; }
-          }
-        }
-    }
+    screen := Rectangle {
+        width: root.framed ? min(root.width, root.fixed-width) : root.width;
+        height: root.framed ? min(root.height, root.fixed-height) : root.height;
+        clip: root.framed;
+        background: Theme.bg;
 
-    if Overlay.menu-open: MenuSheet { width: 100%; height: 100%; }
-    if Overlay.tune-open: TuneSheet { width: 100%; height: 100%; }
-    if Overlay.numpad-open: NumpadDialog { width: 100%; height: 100%; }
-    if Overlay.confirm-open: ConfirmDialog { width: 100%; height: 100%; }
-    if Overlay.file-open: FileDialog { width: 100%; height: 100%; }
-    if Overlay.text-open: TextDialog { width: 100%; height: 100%; }
-
-    if Printer.toast != "": Rectangle {
-        y: parent.height - self.height - 16px;
-        width: min(parent.width - 32px, 560px);
-        height: 52px;
-        border-radius: 26px;
-        background: Theme.surface-2;
-        border-width: 1px;
-        border-color: Printer.toast-error ? Theme.danger : Theme.accent;
-        HorizontalLayout {
-            padding-left: 20px;
-            padding-right: 20px;
-            Text {
-                text: Printer.toast;
-                color: Theme.text;
-                font-size: Theme.font-s;
-                vertical-alignment: center;
-                overflow: elide;
+        VerticalLayout {
+            Header {}
+            // Pages add their own 10 px, so content lines up with the 20 px header
+            HorizontalLayout {
+              padding-left: 10px;
+              padding-right: 10px;
+              vertical-stretch: 1;
+              Rectangle {
+                if root.blocked: NotReadyPanel { width: 100%; height: 100%; }
+                if !root.blocked && Nav.page == 0: DashboardPage { width: 100%; height: 100%; }
+                if !root.blocked && Nav.page == 1: TemperaturePage { width: 100%; height: 100%; }
+                if !root.blocked && Nav.page == 2: MovePage { width: 100%; height: 100%; }
+                if !root.blocked && Nav.page == 3: ExtrudePage { width: 100%; height: 100%; }
+                if !root.blocked && Nav.page == 4: FilesPage { width: 100%; height: 100%; }
+                if !root.blocked && Nav.page == 5: MacrosPage { width: 100%; height: 100%; }
+                if Nav.page == 6: ConsolePage { width: 100%; height: 100%; }
+                if Nav.page == 7: SystemPage { width: 100%; height: 100%; }
+                if Nav.page == 8: SettingsPage { width: 100%; height: 100%; }
+                if Nav.page == 9: NetworkPage { width: 100%; height: 100%; }
+                if Nav.page == 10: UpdatePage { width: 100%; height: 100%; }
+                if !root.blocked && Nav.page == 11: ZCalibratePage { width: 100%; height: 100%; }
+                if !root.blocked && Nav.page == 12: BedMeshPage { width: 100%; height: 100%; }
+                if !root.blocked && Nav.page == 13: CalibrationPage { width: 100%; height: 100%; }
+                if !root.blocked && Nav.page == 14: BedLevelPage { width: 100%; height: 100%; }
+                if !root.blocked && Nav.page == 15: PidPage { width: 100%; height: 100%; }
+                if !root.blocked && Nav.page == 16: ExtruderCalibratePage { width: 100%; height: 100%; }
+              }
             }
         }
-        TouchArea { clicked => { Printer.toast = ""; } }
-        Timer {
-            interval: 5s;
-            running: true;
-            triggered => { Printer.toast = ""; }
-        }
-    }
 
-    if Screensaver.active: ScreensaverView { width: 100%; height: 100%; }
+        if Overlay.menu-open: MenuSheet { width: 100%; height: 100%; }
+        if Overlay.tune-open: TuneSheet { width: 100%; height: 100%; }
+        if Overlay.numpad-open: NumpadDialog { width: 100%; height: 100%; }
+        if Overlay.confirm-open: ConfirmDialog { width: 100%; height: 100%; }
+        if Overlay.file-open: FileDialog { width: 100%; height: 100%; }
+        if Overlay.text-open: TextDialog { width: 100%; height: 100%; }
+
+        if Printer.toast != "": Rectangle {
+            y: parent.height - self.height - 16px;
+            width: min(parent.width - 32px, 560px);
+            height: 52px;
+            border-radius: 26px;
+            background: Theme.surface-2;
+            border-width: 1px;
+            border-color: Printer.toast-error ? Theme.danger : Theme.accent;
+            HorizontalLayout {
+                padding-left: 20px;
+                padding-right: 20px;
+                Text {
+                    text: Printer.toast;
+                    color: Theme.text;
+                    font-size: Theme.font-s;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+            }
+            TouchArea { clicked => { Printer.toast = ""; } }
+            Timer {
+                interval: 5s;
+                running: true;
+                triggered => { Printer.toast = ""; }
+            }
+        }
+
+        if Screensaver.active: ScreensaverView { width: 100%; height: 100%; }
+    }
 }

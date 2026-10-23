@@ -88,6 +88,9 @@ msgstr "Restart firmware"
 msgid "Tune"
 msgstr "Dostrój"
 
+msgid "Print speed"
+msgstr "Prędkość druku"
+
 msgid "Speed"
 msgstr "Prędkość"
 
@@ -115,17 +118,14 @@ msgstr "Pozostało"
 msgid "finishes around {}"
 msgstr "koniec około {}"
 
-msgid "{}% · layer {} · Z {}"
-msgstr "{}% · warstwa {} · Z {}"
+msgid "layer {} · Z {}"
+msgstr "warstwa {} · Z {}"
 
 msgid "print time · filament {}"
 msgstr "czas druku · filament {}"
 
 msgid "State"
 msgstr "Stan"
-
-msgid "Fan {}%"
-msgstr "Wentylator {}%"
 
 msgid "Pause"
 msgstr "Pauza"
@@ -157,6 +157,15 @@ msgstr "Wycofaj"
 msgid "Extrude"
 msgstr "Ekstruduj"
 
+msgid "Filament change"
+msgstr "Wymiana filamentu"
+
+msgid "Unload filament"
+msgstr "Wyładuj filament"
+
+msgid "Load filament"
+msgstr "Załaduj filament"
+
 msgid "Fans"
 msgstr "Wentylatory"
 
@@ -180,12 +189,6 @@ msgstr "{}  (nie zbazowano)"
 
 msgid "Step [mm]"
 msgstr "Krok [mm]"
-
-msgid "Homing"
-msgstr "Bazowanie"
-
-msgid "All"
-msgstr "Wszystkie"
 
 msgid "Motors off"
 msgstr "Wyłącz silniki"
@@ -595,9 +598,6 @@ msgstr "Aktualizuj wszystko"
 msgid "Update everything? Klipper and Moonraker restart during the update."
 msgstr "Zaktualizować wszystko? Klipper i Moonraker zrestartują się w trakcie aktualizacji."
 
-msgid "Open"
-msgstr "Otwórz"
-
 msgid "Paper test: sets the distance between the nozzle and the bed."
 msgstr "Test kartki: ustawia odległość między dyszą a stołem."
 
@@ -711,3 +711,78 @@ msgstr "Zadana"
 
 msgid "Wait until Klipper reports the result. The emergency stop interrupts the calibration."
 msgstr "Poczekaj, aż Klipper poda wynik. Kalibrację przerywa zatrzymanie awaryjne."
+
+msgid "Extruder calibration"
+msgstr "Kalibracja ekstrudera"
+
+msgid "Extruder"
+msgstr "Ekstruder"
+
+msgid "Rotation distance {}"
+msgstr "Rotation distance {}"
+
+msgid "Makes the extruder push exactly as much filament as requested."
+msgstr "Sprawia, że ekstruder podaje dokładnie tyle filamentu, ile trzeba."
+
+msgid "Filament left above the extruder"
+msgstr "Filament pozostały nad ekstruderem"
+
+msgid "Heat the nozzle to the printing temperature."
+msgstr "Nagrzej dyszę do temperatury druku."
+
+msgid "Heat to {}°"
+msgstr "Grzej do {}°"
+
+msgid "Mark the filament {} mm above the extruder entry."
+msgstr "Zaznacz filament {} mm nad wejściem do ekstrudera."
+
+msgid "Extrude {} mm slowly. Too cold to extrude (min. {}°)."
+msgstr "Ekstruduj powoli {} mm. Za zimno na ekstruzję (min. {}°)."
+
+msgid "Extrude {} mm slowly (about 2 minutes) and wait until the motor stops."
+msgstr "Ekstruduj powoli {} mm (ok. 2 minuty) i poczekaj, aż silnik stanie."
+
+msgid "Extrude {} mm"
+msgstr "Ekstruduj {} mm"
+
+msgid "Measure the filament left between the extruder entry and the mark."
+msgstr "Zmierz, ile filamentu zostało między wejściem do ekstrudera a znacznikiem."
+
+msgid "Left to the mark"
+msgstr "Do znacznika zostało"
+
+msgid "Rotation distance"
+msgstr "Rotation distance"
+
+msgid "No rotation_distance in the [extruder] section of the Klipper config."
+msgstr "Brak rotation_distance w sekcji [extruder] konfiguracji Klippera."
+
+msgid "Current"
+msgstr "Obecnie"
+
+msgid "Extruded"
+msgstr "Podano"
+
+msgid "This is more than 30% off; check the mark and measure again."
+msgstr "To ponad 30% różnicy; sprawdź znacznik i zmierz ponownie."
+
+msgid "In use until Klipper restarts; printer.cfg still has {}."
+msgstr "Obowiązuje do restartu Klippera; w printer.cfg nadal jest {}."
+
+msgid "Saving..."
+msgstr "Zapisywanie..."
+
+msgid "Saved in printer.cfg."
+msgstr "Zapisano w printer.cfg."
+
+msgid "printer.cfg has no rotation_distance in [extruder] (it may be in an included file). Set it to {} there."
+msgstr "printer.cfg nie ma rotation_distance w [extruder] (może jest w dołączanym pliku). Ustaw tam {}."
+
+msgid "Could not save: {}"
+msgstr "Nie udało się zapisać: {}"
+
+msgid "Save in printer.cfg"
+msgstr "Zapisz w printer.cfg"
+
+msgid "Write rotation_distance: {} into printer.cfg?"
+msgstr "Zapisać rotation_distance: {} w printer.cfg?"

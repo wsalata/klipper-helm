@@ -6,6 +6,7 @@ mod line_edit;
 mod moonraker;
 mod network;
 mod printer;
+mod printer_cfg;
 mod settings;
 mod thumbs;
 mod updates;
@@ -26,6 +27,13 @@ fn main() -> anyhow::Result<()> {
     }
     let cfg = config::Config::load();
     let ui = AppWindow::new()?;
+    if let Some((width, height)) = std::env::var("KLIPPER_HELM_SCREEN").ok().as_deref().and_then(parse_screen) {
+        // The printer scales its screen to about 800x480 logical pixels (auto_scale), so a window
+        // of that logical size shows the same layout
+        let scale = scale_for(width, height);
+        ui.set_fixed_width(f32::from(width) / scale);
+        ui.set_fixed_height(f32::from(height) / scale);
+    }
 
     let printer = ui.global::<Printer>();
     printer.set_moonraker_url(cfg.moonraker_url.as_str().into());
@@ -122,6 +130,12 @@ fn auto_scale(width: u16, height: u16) {
     }
 }
 
+/// "1024x600" -> (1024, 600)
+fn parse_screen(text: &str) -> Option<(u16, u16)> {
+    let (w, h) = text.trim().split_once(['x', 'X'])?;
+    Some((w.trim().parse().ok()?, h.trim().parse().ok()?))
+}
+
 fn scale_for(width: u16, height: u16) -> f32 {
     (f32::from(width) / 800.0).min(f32::from(height) / 480.0).max(1.0)
 }
@@ -150,6 +164,9 @@ fn wire_actions(ui: &AppWindow, tx: &UnboundedSender<Command>) {
     on!(on_calibrate_mesh, |profile| Command::CalibrateMesh(profile.into()));
     on!(on_level_bed, |method| Command::LevelBed(method.into()));
     on!(on_calibrate_pid, |heater, target| Command::CalibratePid(heater.into(), target));
+    on!(on_measure_extrude, |mm| Command::MeasureExtrude(mm));
+    on!(on_set_rotation_distance, |distance| Command::SetRotationDistance(distance));
+    on!(on_save_rotation_distance, || Command::SaveRotationDistance);
     on!(on_pause, || Command::Pause);
     on!(on_resume, || Command::Resume);
     on!(on_cancel, || Command::Cancel);
@@ -221,6 +238,14 @@ mod tests {
         assert_eq!(super::scale_for(1024, 768), 1.28);
         assert_eq!(super::scale_for(640, 480), 1.0);
     }
+
+    #[test]
+    fn screen_size() {
+        assert_eq!(super::parse_screen("1024x600"), Some((1024, 600)));
+        assert_eq!(super::parse_screen(" 800 X 480 "), Some((800, 480)));
+        assert_eq!(super::parse_screen("800"), None);
+        assert_eq!(super::parse_screen("wide"), None);
+    }
 }
 
 #[cfg(debug_assertions)]
@@ -228,7 +253,7 @@ fn snapshot_pages(ui: &AppWindow, dir: String) -> Timer {
     use slint::Model;
     type Step = Box<dyn Fn(&AppWindow)>;
     let page = |n: i32| -> Step { Box::new(move |ui| ui.global::<Nav>().set_page(n)) };
-    let mut steps: Vec<Step> = (0..8).chain([11, 12]).map(page).collect();
+    let mut steps: Vec<Step> = (0..8).chain([11, 12, 13, 16]).map(page).collect();
     steps.push(Box::new(|ui| {
         if let Some(file) = ui.global::<Printer>().get_files().row_data(0) {
             ui.global::<Nav>().set_page(4);

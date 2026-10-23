@@ -68,6 +68,7 @@ pub fn snapshot(ui: &Weak<AppWindow>, s: Snapshot) {
         sync(&p.get_screws(), s.screws);
         sync(&p.get_pid_heaters(), s.pid_heaters);
         p.set_pid_heater(s.pid_heater.into());
+        p.set_extruder_cal(s.extruder_cal);
         p.set_extruder_temp(s.extruder_temp);
         p.set_has_extruder(s.has_extruder);
         p.set_has_part_fan(s.part_fan.is_some());
@@ -99,8 +100,19 @@ pub fn info(ui: &Weak<AppWindow>, hostname: String, version: String) {
 
 pub fn macros(ui: &Weak<AppWindow>, macros: Vec<String>) {
     with_printer(ui, move |p| {
+        p.set_load_macro(find_macro(&macros, &["LOAD_FILAMENT", "FILAMENT_LOAD"]).into());
+        p.set_unload_macro(find_macro(&macros, &["UNLOAD_FILAMENT", "FILAMENT_UNLOAD"]).into());
         sync(&p.get_macros(), macros.into_iter().map(SharedString::from).collect());
     });
+}
+
+/// First macro matching one of the names (case-insensitive), "" when there is none.
+fn find_macro(macros: &[String], names: &[&str]) -> String {
+    names
+        .iter()
+        .find_map(|n| macros.iter().find(|m| m.eq_ignore_ascii_case(n)))
+        .cloned()
+        .unwrap_or_default()
 }
 
 pub fn files(ui: &Weak<AppWindow>, files: Vec<FileRow>) {
@@ -182,6 +194,8 @@ pub fn reset(ui: &Weak<AppWindow>) {
         sync(&p.get_fans(), Vec::new());
         sync(&p.get_files(), Vec::new());
         sync(&p.get_macros(), Vec::new());
+        p.set_load_macro(Default::default());
+        p.set_unload_macro(Default::default());
         sync(&p.get_console(), Vec::new());
         p.set_job(Default::default());
         p.set_position(Default::default());
@@ -193,6 +207,7 @@ pub fn reset(ui: &Weak<AppWindow>) {
         sync(&p.get_screws(), Vec::new());
         sync(&p.get_pid_heaters(), Vec::new());
         p.set_pid_heater("".into());
+        p.set_extruder_cal(Default::default());
         p.set_details(Default::default());
         p.set_job_thumb(Default::default());
         p.set_details_thumb(Default::default());

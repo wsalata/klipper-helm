@@ -37,6 +37,22 @@
             "presentation": { "panel": "dedicated" }
         },
         {
+            "label": "Panel (mock, 800x480)",
+            "detail": "Like Panel (mock), drawn at the size of the printer's screen",
+            "type": "shell",
+            "command": "cargo run",
+            "options": {
+                "env": {
+                    "MOONRAKER_URL": "ws://127.0.0.1:7125/websocket",
+                    "KLIPPER_HELM_CONFIG": "${workspaceFolder}/target/dev-mock.toml",
+                    "KLIPPER_HELM_SCREEN": "800x480"
+                }
+            },
+            "dependsOn": "Mock Moonraker",
+            "problemMatcher": ["$rustc"],
+            "presentation": { "panel": "dedicated" }
+        },
+        {
             "label": "Panel (printer)",
             "detail": "Normal settings (~/.config/klipper-helm); change the address in System → Panel settings",
             "type": "shell",

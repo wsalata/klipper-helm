@@ -1,6 +1,6 @@
 import { Theme } from "theme.slint";
-import { Printer, Actions, Overlay, Nav, Conn, Settings, Strings, Keys, Network, Screensaver, Update } from "state.slint";
-import { Btn, BtnKind, Card, Caption, InfoRow, Thumb, CursorText, Stepper } from "widgets.slint";
+import { Printer, Actions, Overlay, Nav, Conn, Settings, Strings, Keys, Network, Screensaver, Update, ExtruderMeasure } from "state.slint";
+import { Btn, BtnKind, Card, Caption, InfoRow, Thumb, CursorText, Stepper, ValueBox, FanSpeeds } from "widgets.slint";
 
 // Dimmed backdrop that blocks touches to the screen below.
 component Scrim inherits Rectangle {
@@ -21,6 +21,8 @@ component Dialog inherits Rectangle {
 }
 
 export component NumpadDialog inherits Scrim {
+    // Speed and flow: whole percents, with a reset to 100%
+    property <bool> percent: Overlay.numpad-purpose == "speed" || Overlay.numpad-purpose == "flow";
     dismiss => { Overlay.numpad-open = false; }
 
     function press(k: string) {
@@ -34,6 +36,12 @@ export component NumpadDialog inherits Scrim {
         if (value.is-float()) {
             if (Overlay.numpad-purpose == "temp") {
                 Actions.set-temp(Overlay.numpad-id, value.to-float());
+            } else if (Overlay.numpad-purpose == "speed") {
+                Actions.gcode("M220 S" + max(10, round(value.to-float())));
+            } else if (Overlay.numpad-purpose == "flow") {
+                Actions.gcode("M221 S" + max(50, round(value.to-float())));
+            } else if (Overlay.numpad-purpose == "extruder-mark") {
+                ExtruderMeasure.remaining = value.to-float();
             } else {
                 Settings.edit-number(Overlay.numpad-id, value.to-float());
             }
@@ -72,8 +80,9 @@ export component NumpadDialog inherits Scrim {
                 Btn { text: "C"; clicked => { Overlay.numpad-value = ""; } }
                 Btn { text: "0"; clicked => { root.press("0"); } }
                 if Overlay.numpad-purpose == "temp": Btn { text: @tr("Off"); font-size: Theme.font-s; clicked => { root.submit("0"); } }
+                if root.percent: Btn { text: "100%"; font-size: Theme.font-s; clicked => { root.submit("100"); } }
                 // The locale decimal separator, because to-float() parses with it ("," in Polish)
-                if Overlay.numpad-purpose != "temp": Btn { text: Platform.decimal-separator; clicked => { root.press(Platform.decimal-separator); } }
+                if Overlay.numpad-purpose != "temp" && !root.percent: Btn { text: Platform.decimal-separator; clicked => { root.press(Platform.decimal-separator); } }
             }
             HorizontalLayout {
                 spacing: 6px;
@@ -243,6 +252,8 @@ export component ConfirmDialog inherits Scrim {
             Actions.host-reboot();
         } else if (action == "shutdown") {
             Actions.host-shutdown();
+        } else if (action == "save-rotation-distance") {
+            Actions.save-rotation-distance();
         } else if (action == "gcode") {
             Actions.gcode(arg);
         } else if (action == "update") {
@@ -274,7 +285,7 @@ export component ConfirmDialog inherits Scrim {
                 Btn { text: @tr("No"); kind: BtnKind.ghost; clicked => { Overlay.confirm-open = false; } }
                 Btn {
                     text: @tr("Yes");
-                    kind: Overlay.confirm-action == "gcode" ? BtnKind.accent : BtnKind.danger;
+                    kind: Overlay.confirm-action == "gcode" || Overlay.confirm-action == "save-rotation-distance" ? BtnKind.accent : BtnKind.danger;
                     clicked => {
                         Overlay.confirm-open = false;
                         root.run(Overlay.confirm-action, Overlay.confirm-arg);
@@ -550,7 +561,7 @@ export component MenuSheet inherits Scrim {
                 for item in root.row1: MenuTile {
                     icon: item.icon;
                     text: item.text;
-                    // Z calibration (11), Bed mesh (12), Bed levelling (14) and Heaters (15) are sub-pages of Calibration
+                    // Z calibration (11), Bed mesh (12), Bed levelling (14), Heaters (15) and Extruder (16) are sub-pages of Calibration
                     active: Nav.page == item.page || (item.page == 13 && (Nav.page == 11 || Nav.page == 12 || Nav.page >= 14));
                     clicked => { root.go(item.page); }
                 }
@@ -579,43 +590,53 @@ export component TuneSheet inherits Scrim {
 
     Dialog {
         width: min(root.width - 32px, 660px);
-        height: 300px;
+        height: tune.preferred-height;
         y: root.height - self.height - 16px;
-        VerticalLayout {
+        tune := VerticalLayout {
             padding: 16px;
             spacing: 12px;
+            alignment: start;
             SheetTitle {
                 text: @tr("Tune");
                 close => { Overlay.tune-open = false; }
             }
+            // Target temperatures; the numpad opens over this sheet
             HorizontalLayout {
                 spacing: 12px;
-                Stepper {
-                    label: @tr("Speed");
-                    value: Printer.job.speed-factor + "%";
-                    minus => { Actions.gcode("M220 S" + max(10, Printer.job.speed-factor - 10)); }
-                    plus => { Actions.gcode("M220 S" + (Printer.job.speed-factor + 10)); }
-                }
-                Stepper {
-                    label: @tr("Flow");
-                    value: Printer.job.flow-factor + "%";
-                    minus => { Actions.gcode("M221 S" + max(50, Printer.job.flow-factor - 1)); }
-                    plus => { Actions.gcode("M221 S" + (Printer.job.flow-factor + 1)); }
+                for h in Printer.top-heaters: ValueBox {
+                    label: Strings.heater-name(h) + " · " + round(h.temp) + "°";
+                    value: round(h.target) + "°";
+                    clicked => { Overlay.edit-temp(h); }
                 }
             }
             HorizontalLayout {
                 spacing: 12px;
-                Stepper {
-                    label: @tr("Z offset");
-                    value: Printer.job.z-offset;
-                    minus => { Actions.gcode("SET_GCODE_OFFSET Z_ADJUST=-0.01 MOVE=1"); }
-                    plus => { Actions.gcode("SET_GCODE_OFFSET Z_ADJUST=0.01 MOVE=1"); }
+                ValueBox {
+                    label: @tr("Speed");
+                    value: Printer.job.speed-factor + "%";
+                    clicked => { Overlay.edit-factor("speed", @tr("Print speed"), Printer.job.speed-factor); }
                 }
-                if Printer.has-part-fan: Stepper {
-                    label: @tr("Part cooling");
-                    value: round(Printer.part-fan * 100) + "%";
-                    minus => { Actions.set-fan("fan", max(0, Printer.part-fan - 0.1)); }
-                    plus => { Actions.set-fan("fan", min(1, Printer.part-fan + 0.1)); }
+                ValueBox {
+                    label: @tr("Flow");
+                    value: Printer.job.flow-factor + "%";
+                    clicked => { Overlay.edit-factor("flow", @tr("Flow"), Printer.job.flow-factor); }
+                }
+            }
+            Stepper {
+                label: @tr("Z offset");
+                value: Printer.job.z-offset;
+                minus => { Actions.gcode("SET_GCODE_OFFSET Z_ADJUST=-0.01 MOVE=1"); }
+                plus => { Actions.gcode("SET_GCODE_OFFSET Z_ADJUST=0.01 MOVE=1"); }
+            }
+            if Printer.has-part-fan: Rectangle {
+                background: Theme.bg;
+                border-radius: Theme.radius-l;
+                height: 80px;
+                HorizontalLayout {
+                    padding: 12px;
+                    spacing: 12px;
+                    Caption { text: @tr("Part cooling"); horizontal-stretch: 0; }
+                    FanSpeeds { fan-id: "fan"; speed: Printer.part-fan; horizontal-stretch: 1; }
                 }
             }
         }

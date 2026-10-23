@@ -21,7 +21,11 @@ On a Raspberry Pi it draws directly through KMS/DRM (no X11/Wayland); on a PC it
   system packages, as in Mainsail)
 - **Calibration** (own menu entry): Z offset (probe/BLTouch paper test, or the Z endstop), the bed mesh
   (height map, calibration, profiles) and bed levelling (bed screws measured with the probe or
-  adjusted by the paper test, Z tilt, quad gantry level) and heater PID tuning
+  adjusted by the paper test, Z tilt, quad gantry level), heater PID tuning and the extruder's
+  `rotation_distance` (mark the filament, extrude 100 mm, enter what is left). Klipper's `SAVE_CONFIG`
+  does not keep that value, so the panel applies it with `SET_EXTRUDER_ROTATION_DISTANCE` and, on request,
+  writes it into `rotation_distance` of `[extruder]` in `printer.cfg` through Moonraker's file API
+  (if it is in an included file instead, the panel says so and the value has to be set there by hand)
 - A **screen saver** with a dimmed clock and the print progress after a few minutes without touches
 
 The emergency stop is always in the top right corner: a red round button with three clockwise arrows,
@@ -36,6 +40,10 @@ cargo run                                   # panel in a window
 
 With a real printer: `cargo run` and set the address in System → Panel settings
 (or `MOONRAKER_URL=ws://<printer-ip>:7125/websocket cargo run` if the config file has no address).
+
+To see the layout of the printer's screen, set its resolution: `KLIPPER_HELM_SCREEN=800x480 cargo run`
+(or `1024x600`, `1280x720`, ...). The panel is then drawn at that size in the middle of the window,
+scaled the way the printer scales it, also under tiling window managers.
 
 In VS Code, the tasks in `.vscode/` start the mock and the panel together (Ctrl+Shift+P → "Tasks: Run Task").
 
